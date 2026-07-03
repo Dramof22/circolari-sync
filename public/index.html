@@ -44,6 +44,35 @@
       padding: 32px 24px 60px;
     }
 
+    .url-box {
+      background: #f8fbff;
+      border: 1px solid #d9e8ff;
+      border-radius: 22px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+
+    .url-box label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .url-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .url-row input {
+      flex: 1;
+      min-width: 260px;
+      padding: 14px 16px;
+      border-radius: 999px;
+      border: 1px solid #cfe2ff;
+      font-size: 16px;
+    }
+
     .notice {
       background: #eef5ff;
       border: 1px solid #cfe2ff;
@@ -74,6 +103,19 @@
       padding: 14px 20px;
       border-radius: 999px;
       font-weight: 700;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .button-secondary {
+      background: #172033;
+    }
+
+    .message {
+      margin-top: 14px;
+      font-weight: 700;
+      color: #0b5ed7;
     }
 
     .section-title {
@@ -159,6 +201,20 @@
   <main>
     <div class="container">
 
+      <section class="url-box">
+        <h2>Inserisci il sito della scuola</h2>
+        <p>Incolla qui l'indirizzo pubblico della pagina dove la scuola pubblica le circolari.</p>
+
+        <label for="schoolUrl">URL pagina circolari</label>
+
+        <div class="url-row">
+          <input id="schoolUrl" type="url" placeholder="https://www.nome-scuola.edu.it/circolari">
+          <button class="button button-secondary" onclick="analizzaUrl()">Analizza circolari</button>
+        </div>
+
+        <div id="urlMessage" class="message"></div>
+      </section>
+
       <div class="notice">
         <strong>Attenzione:</strong>
         CircolariSync legge solo comunicazioni pubbliche e genera eventi in modo automatico.
@@ -220,8 +276,30 @@
 
   <footer>
     <div class="container">
-      Demo locale di CircolariSync — progettata per insegnanti italiani.
+      Demo di CircolariSync — progettata per insegnanti italiani.
     </div>
   </footer>
+
+  <script>
+    function analizzaUrl() {
+      const input = document.getElementById("schoolUrl");
+      const messaggio = document.getElementById("urlMessage");
+      const url = input.value.trim();
+
+      if (!url) {
+        messaggio.textContent = "Inserisci prima un URL.";
+        return;
+      }
+
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        messaggio.textContent = "L'URL deve iniziare con http:// oppure https://";
+        return;
+      }
+
+      messaggio.textContent =
+        "URL salvato per la prossima fase: " + url +
+        ". Ora collegheremo questa casella a Cloudflare Worker per leggere davvero il sito.";
+    }
+  </script>
 </body>
 </html>

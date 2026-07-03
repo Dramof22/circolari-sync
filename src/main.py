@@ -7,6 +7,7 @@ import json
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_FILE = PROJECT_ROOT / "config.json"
 CARTELLA_PUBLIC = PROJECT_ROOT / "public"
+CARTELLA_DOCS = PROJECT_ROOT / "docs"
 
 NOME_APP = "CircolariSync"
 
@@ -325,6 +326,35 @@ def crea_index_html(eventi_sicuri, eventi_dubbi, nome_scuola):
       padding: 32px 24px 60px;
     }}
 
+    .url-box {{
+      background: #f8fbff;
+      border: 1px solid #d9e8ff;
+      border-radius: 22px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }}
+
+    .url-box label {{
+      display: block;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }}
+
+    .url-row {{
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }}
+
+    .url-row input {{
+      flex: 1;
+      min-width: 260px;
+      padding: 14px 16px;
+      border-radius: 999px;
+      border: 1px solid #cfe2ff;
+      font-size: 16px;
+    }}
+
     .notice {{
       background: #eef5ff;
       border: 1px solid #cfe2ff;
@@ -355,6 +385,19 @@ def crea_index_html(eventi_sicuri, eventi_dubbi, nome_scuola):
       padding: 14px 20px;
       border-radius: 999px;
       font-weight: 700;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }}
+
+    .button-secondary {{
+      background: #172033;
+    }}
+
+    .message {{
+      margin-top: 14px;
+      font-weight: 700;
+      color: #0b5ed7;
     }}
 
     .section-title {{
@@ -440,6 +483,20 @@ def crea_index_html(eventi_sicuri, eventi_dubbi, nome_scuola):
   <main>
     <div class="container">
 
+      <section class="url-box">
+        <h2>Inserisci il sito della scuola</h2>
+        <p>Incolla qui l'indirizzo pubblico della pagina dove la scuola pubblica le circolari.</p>
+
+        <label for="schoolUrl">URL pagina circolari</label>
+
+        <div class="url-row">
+          <input id="schoolUrl" type="url" placeholder="https://www.nome-scuola.edu.it/circolari">
+          <button class="button button-secondary" onclick="analizzaUrl()">Analizza circolari</button>
+        </div>
+
+        <div id="urlMessage" class="message"></div>
+      </section>
+
       <div class="notice">
         <strong>Attenzione:</strong>
         CircolariSync legge solo comunicazioni pubbliche e genera eventi in modo automatico.
@@ -470,14 +527,54 @@ def crea_index_html(eventi_sicuri, eventi_dubbi, nome_scuola):
 
   <footer>
     <div class="container">
-      Demo locale di CircolariSync — progettata per insegnanti italiani.
+      Demo di CircolariSync — progettata per insegnanti italiani.
     </div>
   </footer>
+
+  <script>
+    function analizzaUrl() {{
+      const input = document.getElementById("schoolUrl");
+      const messaggio = document.getElementById("urlMessage");
+      const url = input.value.trim();
+
+      if (!url) {{
+        messaggio.textContent = "Inserisci prima un URL.";
+        return;
+      }}
+
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {{
+        messaggio.textContent = "L'URL deve iniziare con http:// oppure https://";
+        return;
+      }}
+
+      messaggio.textContent =
+        "URL salvato per la prossima fase: " + url +
+        ". Ora collegheremo questa casella a Cloudflare Worker per leggere davvero il sito.";
+    }}
+  </script>
 </body>
 </html>
 """
 
     return html
+
+
+def copia_in_docs():
+    CARTELLA_DOCS.mkdir(exist_ok=True)
+
+    file_da_copiare = [
+        "index.html",
+        "calendar.ics",
+        "events.json",
+        "dubbi.json",
+    ]
+
+    for nome_file in file_da_copiare:
+        origine = CARTELLA_PUBLIC / nome_file
+        destinazione = CARTELLA_DOCS / nome_file
+
+        if origine.exists():
+            destinazione.write_text(origine.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def main():
@@ -531,14 +628,10 @@ def main():
     salva_json(CARTELLA_PUBLIC / "events.json", eventi_sicuri)
     salva_json(CARTELLA_PUBLIC / "dubbi.json", eventi_dubbi)
 
+    copia_in_docs()
+
     print("CircolariSync completato!")
-    print("Scuola:", nome_scuola)
-    print("File creati:")
-    print("- public/index.html")
-    print("- public/calendar.ics")
-    print("- public/events.json")
-    print("- public/dubbi.json")
-    print()
+    print("File aggiornati in public e docs.")
     print("Eventi sicuri:", len(eventi_sicuri))
     print("Eventi dubbi:", len(eventi_dubbi))
 
