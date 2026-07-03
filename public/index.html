@@ -1,0 +1,227 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>CircolariSync</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background: #ffffff;
+      color: #172033;
+    }
+
+    header {
+      background: #0b5ed7;
+      color: white;
+      padding: 48px 24px;
+    }
+
+    .container {
+      max-width: 1050px;
+      margin: 0 auto;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 44px;
+      letter-spacing: -1px;
+    }
+
+    header p {
+      margin-top: 12px;
+      font-size: 19px;
+      opacity: 0.95;
+      max-width: 720px;
+    }
+
+    main {
+      padding: 32px 24px 60px;
+    }
+
+    .notice {
+      background: #eef5ff;
+      border: 1px solid #cfe2ff;
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .calendar-box {
+      background: #f8fbff;
+      border: 1px solid #d9e8ff;
+      border-radius: 22px;
+      padding: 24px;
+      margin-bottom: 34px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      display: inline-block;
+      background: #0b5ed7;
+      color: white;
+      text-decoration: none;
+      padding: 14px 20px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .section-title {
+      margin-top: 38px;
+      margin-bottom: 16px;
+      font-size: 26px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      border-radius: 22px;
+      padding: 22px;
+      border: 1px solid #e6eaf0;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      background: white;
+    }
+
+    .card h3 {
+      margin-top: 12px;
+      margin-bottom: 14px;
+      font-size: 22px;
+    }
+
+    .card p {
+      margin: 8px 0;
+      line-height: 1.45;
+    }
+
+    .card a {
+      color: #0b5ed7;
+      font-weight: 700;
+    }
+
+    .evento-sicuro {
+      border-top: 6px solid #0b5ed7;
+    }
+
+    .evento-dubbio {
+      border-top: 6px solid #f2b705;
+      background: #fffaf0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 7px 11px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .badge-ok {
+      background: #e7f1ff;
+      color: #084298;
+    }
+
+    .badge-warning {
+      background: #fff3cd;
+      color: #664d03;
+    }
+
+    footer {
+      border-top: 1px solid #e6eaf0;
+      padding: 24px;
+      color: #5b667a;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>CircolariSync</h1>
+      <p>Legge le circolari pubbliche della scuola e genera un calendario aggiornabile.</p>
+      <p><strong>Scuola Demo</strong></p>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+
+      <div class="notice">
+        <strong>Attenzione:</strong>
+        CircolariSync legge solo comunicazioni pubbliche e genera eventi in modo automatico.
+        Non sostituisce il registro elettronico, il sito ufficiale della scuola o le comunicazioni ufficiali.
+        Verificare sempre la circolare originale.
+      </div>
+
+      <section class="calendar-box">
+        <div>
+          <h2>Calendario aggiornabile</h2>
+          <p>Gli eventi sicuri vengono inseriti nel file calendario. Gli eventi dubbi restano fuori e vanno controllati.</p>
+        </div>
+        <a class="button" href="calendar.ics">Scarica calendario .ics</a>
+      </section>
+
+      <h2 class="section-title">Eventi sicuri</h2>
+      <section class="grid">
+        
+    <article class="card evento-sicuro">
+      <div class="badge badge-ok">Evento sicuro</div>
+      <h3>Collegio dei Docenti</h3>
+      <p><strong>Data:</strong> 2026-09-12</p>
+      <p><strong>Orario:</strong> 15:00 - 17:00</p>
+      <p><strong>Luogo:</strong> Aula Magna</p>
+      <p><strong>Fonte:</strong> Circolare n. 12 - Convocazione Collegio dei Docenti</p>
+      <p><a href="../demo_site/circolari/collegio-docenti.html">Apri circolare originale</a></p>
+    </article>
+    
+      </section>
+
+      <h2 class="section-title">Eventi dubbi da verificare</h2>
+      <section class="grid">
+        
+    <article class="card evento-dubbio">
+      <div class="badge badge-warning">Da verificare</div>
+      <h3>Consiglio di Classe</h3>
+      <p><strong>Data:</strong> 2026-10-20</p>
+      <p><strong>Ora:</strong> non trovata</p>
+      <p><strong>Motivo:</strong> manca l'orario di inizio</p>
+      <p><strong>Fonte:</strong> Circolare n. 15 - Consigli di classe ottobre</p>
+      <p><a href="../demo_site/circolari/consigli-classe.html">Apri circolare originale</a></p>
+    </article>
+    
+
+    <article class="card evento-dubbio">
+      <div class="badge badge-warning">Da verificare</div>
+      <h3>Formazione</h3>
+      <p><strong>Data:</strong> non trovata</p>
+      <p><strong>Ora:</strong> non trovata</p>
+      <p><strong>Motivo:</strong> manca la data dell'evento, manca l'orario di inizio</p>
+      <p><strong>Fonte:</strong> Circolare n. 18 - Formazione docenti sicurezza</p>
+      <p><a href="../demo_site/circolari/formazione.html">Apri circolare originale</a></p>
+    </article>
+    
+      </section>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      Demo locale di CircolariSync — progettata per insegnanti italiani.
+    </div>
+  </footer>
+</body>
+</html>
