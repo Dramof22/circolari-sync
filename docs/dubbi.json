@@ -1,0 +1,24 @@
+[
+  {
+    "titolo": "Consiglio di Classe",
+    "circolare": "Circolare n. 15 - Consigli di classe ottobre",
+    "data": "2026-10-20",
+    "ora_inizio": null,
+    "ora_fine": null,
+    "luogo": null,
+    "link": "circolari/consigli-classe.html",
+    "sicurezza": "dubbio",
+    "motivo_dubbio": "manca l'orario di inizio"
+  },
+  {
+    "titolo": "Formazione",
+    "circolare": "Circolare n. 18 - Formazione docenti sicurezza",
+    "data": null,
+    "ora_inizio": null,
+    "ora_fine": null,
+    "luogo": null,
+    "link": "circolari/formazione.html",
+    "sicurezza": "dubbio",
+    "motivo_dubbio": "manca la data dell'evento, manca l'orario di inizio"
+  }
+]

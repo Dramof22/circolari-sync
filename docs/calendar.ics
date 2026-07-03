@@ -1,0 +1,17 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//CircolariSync//IT
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Circolari — Scuola Demo
+X-WR-TIMEZONE:Europe/Rome
+BEGIN:VEVENT
+UID:circolari/collegio-docenti.html-2026-09-12-15:00@circolari-sync
+DTSTART;TZID=Europe/Rome:20260912T150000
+DTEND;TZID=Europe/Rome:20260912T170000
+SUMMARY:Collegio dei Docenti
+DESCRIPTION:Evento estratto automaticamente da CircolariSync. Verificare sempre la circolare originale. CircolariSync non sostituisce le comunicazioni ufficiali della scuola. Fonte: Circolare n. 12 - Convocazione Collegio dei Docenti. Link: circolari/collegio-docenti.html. Sicurezza: sicuro.
+LOCATION:Aula Magna
+URL:circolari/collegio-docenti.html
+END:VEVENT
+END:VCALENDAR
