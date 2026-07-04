@@ -1,305 +1,303 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CircolariSync</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
 
+  <style>
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-      background: #ffffff;
-      color: #172033;
+      font-family: Arial, sans-serif;
+      background: #f4f8ff;
+      color: #16324f;
     }
 
     header {
-      background: #0b5ed7;
+      background: linear-gradient(135deg, #0d6efd, #084298);
       color: white;
-      padding: 48px 24px;
-    }
-
-    .container {
-      max-width: 1050px;
-      margin: 0 auto;
+      padding: 40px 20px;
+      text-align: center;
     }
 
     header h1 {
       margin: 0;
-      font-size: 44px;
-      letter-spacing: -1px;
+      font-size: 42px;
     }
 
     header p {
-      margin-top: 12px;
-      font-size: 19px;
-      opacity: 0.95;
-      max-width: 720px;
+      margin-top: 10px;
+      font-size: 18px;
     }
 
     main {
-      padding: 32px 24px 60px;
+      max-width: 900px;
+      margin: 30px auto;
+      padding: 0 20px;
     }
 
-    .url-box {
-      background: #f8fbff;
-      border: 1px solid #d9e8ff;
-      border-radius: 22px;
+    .box {
+      background: white;
+      border-radius: 16px;
       padding: 24px;
-      margin-bottom: 28px;
-    }
-
-    .url-box label {
-      display: block;
-      font-weight: 700;
-      margin-bottom: 10px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
     }
 
     .url-row {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
-    .url-row input {
+    input {
       flex: 1;
       min-width: 260px;
-      padding: 14px 16px;
-      border-radius: 999px;
-      border: 1px solid #cfe2ff;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #b7c9e2;
       font-size: 16px;
+    }
+
+    button, .button {
+      background: #0d6efd;
+      color: white;
+      border: none;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    button:hover, .button:hover {
+      background: #084298;
+    }
+
+    button:disabled {
+      background: #8bb8f5;
+      cursor: not-allowed;
+    }
+
+    .event {
+      border-left: 6px solid #0d6efd;
+      padding: 14px;
+      margin: 12px 0;
+      background: #eef5ff;
+      border-radius: 10px;
+    }
+
+    .dubbi {
+      background: #fff7d6;
+      border-left: 6px solid #ffc107;
     }
 
     .notice {
-      background: #eef5ff;
-      border: 1px solid #cfe2ff;
-      border-radius: 18px;
-      padding: 20px;
-      margin-bottom: 28px;
-      line-height: 1.5;
+      background: #eaf2ff;
+      border-left: 6px solid #0d6efd;
     }
 
-    .calendar-box {
-      background: #f8fbff;
-      border: 1px solid #d9e8ff;
-      border-radius: 22px;
-      padding: 24px;
-      margin-bottom: 34px;
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      align-items: center;
-      flex-wrap: wrap;
+    .error {
+      background: #ffe8e8;
+      border-left: 6px solid #dc3545;
     }
 
-    .button {
-      display: inline-block;
-      background: #0b5ed7;
-      color: white;
-      text-decoration: none;
-      padding: 14px 20px;
-      border-radius: 999px;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    .button-secondary {
-      background: #172033;
-    }
-
-    .message {
-      margin-top: 14px;
-      font-weight: 700;
-      color: #0b5ed7;
-    }
-
-    .section-title {
-      margin-top: 38px;
-      margin-bottom: 16px;
-      font-size: 26px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 18px;
-    }
-
-    .card {
-      border-radius: 22px;
-      padding: 22px;
-      border: 1px solid #e6eaf0;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-      background: white;
-    }
-
-    .card h3 {
-      margin-top: 12px;
-      margin-bottom: 14px;
-      font-size: 22px;
-    }
-
-    .card p {
-      margin: 8px 0;
-      line-height: 1.45;
-    }
-
-    .card a {
-      color: #0b5ed7;
-      font-weight: 700;
-    }
-
-    .evento-sicuro {
-      border-top: 6px solid #0b5ed7;
-    }
-
-    .evento-dubbio {
-      border-top: 6px solid #f2b705;
-      background: #fffaf0;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 7px 11px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .badge-ok {
-      background: #e7f1ff;
-      color: #084298;
-    }
-
-    .badge-warning {
-      background: #fff3cd;
-      color: #664d03;
-    }
-
-    footer {
-      border-top: 1px solid #e6eaf0;
-      padding: 24px;
-      color: #5b667a;
+    .small {
+      color: #5f6f82;
       font-size: 14px;
+    }
+
+    .result-title {
+      margin-top: 0;
+    }
+
+    .source-link {
+      word-break: break-word;
+      font-size: 14px;
+    }
+
+    #apiResult {
+      margin-top: 14px;
+      font-weight: bold;
+    }
+
+    #liveResults {
+      display: none;
     }
   </style>
 </head>
+
 <body>
   <header>
-    <div class="container">
-      <h1>CircolariSync</h1>
-      <p>Legge le circolari pubbliche della scuola e genera un calendario aggiornabile.</p>
-      <p><strong>Scuola Demo</strong></p>
-    </div>
+    <h1>CircolariSync</h1>
+    <p>Legge circolari pubbliche e genera un calendario aggiornabile</p>
   </header>
 
   <main>
-    <div class="container">
+    <section class="box">
+      <h2>Analizza un sito scuola</h2>
+      <p>Inserisci l’indirizzo pubblico della pagina circolari o di una singola circolare.</p>
 
-      <section class="url-box">
-        <h2>Inserisci il sito della scuola</h2>
-        <p>Incolla qui l'indirizzo pubblico della pagina dove la scuola pubblica le circolari.</p>
-
-        <label for="schoolUrl">URL pagina circolari</label>
-
-        <div class="url-row">
-          <input id="schoolUrl" type="url" placeholder="https://www.nome-scuola.edu.it/circolari">
-          <button class="button button-secondary" onclick="analizzaUrl()">Analizza circolari</button>
-        </div>
-
-        <div id="urlMessage" class="message"></div>
-      </section>
-
-      <div class="notice">
-        <strong>Attenzione:</strong>
-        CircolariSync legge solo comunicazioni pubbliche e genera eventi in modo automatico.
-        Non sostituisce il registro elettronico, il sito ufficiale della scuola o le comunicazioni ufficiali.
-        Verificare sempre la circolare originale.
+      <div class="url-row">
+        <input
+          id="schoolUrl"
+          type="url"
+          value="https://comprensivoprimolevi.edu.it/circolare/assemblea-sindacale-di-istituto-per-il-giorno-28-novembre-2023-ore-800-1000/"
+          placeholder="https://www.scuola.edu.it/circolari"
+        />
+        <button id="analyzeButton" onclick="analyzeSchool()">Analizza circolari</button>
       </div>
 
-      <section class="calendar-box">
-        <div>
-          <h2>Calendario aggiornabile</h2>
-          <p>Gli eventi sicuri vengono inseriti nel file calendario. Gli eventi dubbi restano fuori e vanno controllati.</p>
-        </div>
-        <a class="button" href="calendar.ics">Scarica calendario .ics</a>
-      </section>
+      <div id="apiResult" class="small"></div>
+    </section>
 
-      <h2 class="section-title">Eventi sicuri</h2>
-      <section class="grid">
-        
-    <article class="card evento-sicuro">
-      <div class="badge badge-ok">Evento sicuro</div>
-      <h3>Collegio dei Docenti</h3>
-      <p><strong>Data:</strong> 2026-09-12</p>
-      <p><strong>Orario:</strong> 15:00 - 17:00</p>
-      <p><strong>Luogo:</strong> Aula Magna</p>
-      <p><strong>Fonte:</strong> Circolare n. 12 - Convocazione Collegio dei Docenti</p>
-      <p><a href="../demo_site/circolari/collegio-docenti.html">Apri circolare originale</a></p>
-    </article>
-    
-      </section>
+    <section id="liveResults" class="box">
+      <h2 class="result-title">Risultato analisi online</h2>
 
-      <h2 class="section-title">Eventi dubbi da verificare</h2>
-      <section class="grid">
-        
-    <article class="card evento-dubbio">
-      <div class="badge badge-warning">Da verificare</div>
-      <h3>Consiglio di Classe</h3>
-      <p><strong>Data:</strong> 2026-10-20</p>
-      <p><strong>Ora:</strong> non trovata</p>
-      <p><strong>Motivo:</strong> manca l'orario di inizio</p>
-      <p><strong>Fonte:</strong> Circolare n. 15 - Consigli di classe ottobre</p>
-      <p><a href="../demo_site/circolari/consigli-classe.html">Apri circolare originale</a></p>
-    </article>
-    
+      <h3>Eventi trovati</h3>
+      <div id="liveEvents"></div>
 
-    <article class="card evento-dubbio">
-      <div class="badge badge-warning">Da verificare</div>
-      <h3>Formazione</h3>
-      <p><strong>Data:</strong> non trovata</p>
-      <p><strong>Ora:</strong> non trovata</p>
-      <p><strong>Motivo:</strong> manca la data dell'evento, manca l'orario di inizio</p>
-      <p><strong>Fonte:</strong> Circolare n. 18 - Formazione docenti sicurezza</p>
-      <p><a href="../demo_site/circolari/formazione.html">Apri circolare originale</a></p>
-    </article>
-    
-      </section>
+      <h3>Eventi da verificare</h3>
+      <div id="liveDubbi"></div>
+    </section>
 
-    </div>
+    <section class="box">
+      <h2>Calendario</h2>
+      <p>Scarica il calendario demo generato da CircolariSync.</p>
+      <a class="button" href="calendar.ics" download>Scarica calendar.ics</a>
+    </section>
+
+    <section class="box">
+      <h2>Eventi sicuri demo</h2>
+      <div id="events">Caricamento eventi...</div>
+    </section>
+
+    <section class="box dubbi">
+      <h2>Eventi da verificare demo</h2>
+      <div id="dubbi">Caricamento dubbi...</div>
+    </section>
+
+    <section class="box notice">
+      <h2>Attenzione</h2>
+      <p>
+        CircolariSync non sostituisce il sito ufficiale della scuola,
+        il registro elettronico o le comunicazioni ufficiali.
+        Gli eventi estratti automaticamente devono sempre essere verificati.
+      </p>
+    </section>
   </main>
 
-  <footer>
-    <div class="container">
-      Demo di CircolariSync — progettata per insegnanti italiani.
-    </div>
-  </footer>
-
   <script>
-    function analizzaUrl() {
-      const input = document.getElementById("schoolUrl");
-      const messaggio = document.getElementById("urlMessage");
-      const url = input.value.trim();
+    const WORKER_URL = "https://circolari-sync-worker.circolari-sync-dramof22.workers.dev/api/analyze";
 
-      if (!url) {
-        messaggio.textContent = "Inserisci prima un URL.";
-        return;
+    async function loadJson(file, elementId, isDubbio) {
+      const container = document.getElementById(elementId);
+
+      try {
+        const response = await fetch(file);
+        const data = await response.json();
+
+        if (!data.length) {
+          container.innerHTML = "<p>Nessun elemento trovato.</p>";
+          return;
+        }
+
+        container.innerHTML = data.map(item => `
+          <div class="event ${isDubbio ? "dubbi" : ""}">
+            <strong>${escapeHtml(item.titolo)}</strong><br>
+            Data: ${escapeHtml(item.data || "data non trovata")}<br>
+            Orario: ${escapeHtml(item.ora_inizio || "orario non trovato")} ${item.ora_fine ? "- " + escapeHtml(item.ora_fine) : ""}<br>
+            Circolare: ${escapeHtml(item.circolare)}
+          </div>
+        `).join("");
+      } catch (error) {
+        container.innerHTML = "<p>Errore nel caricamento dei dati.</p>";
       }
-
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        messaggio.textContent = "L'URL deve iniziare con http:// oppure https://";
-        return;
-      }
-
-      messaggio.textContent =
-        "URL salvato per la prossima fase: " + url +
-        ". Ora collegheremo questa casella a Cloudflare Worker per leggere davvero il sito.";
     }
+
+    async function analyzeSchool() {
+      const input = document.getElementById("schoolUrl");
+      const result = document.getElementById("apiResult");
+      const button = document.getElementById("analyzeButton");
+      const liveResults = document.getElementById("liveResults");
+      const liveEvents = document.getElementById("liveEvents");
+      const liveDubbi = document.getElementById("liveDubbi");
+
+      const schoolUrl = input.value.trim();
+
+      if (!schoolUrl.startsWith("http://") && !schoolUrl.startsWith("https://")) {
+        result.textContent = "Inserisci un URL valido che inizi con http:// o https://";
+        return;
+      }
+
+      result.textContent = "Analisi in corso...";
+      button.disabled = true;
+      liveResults.style.display = "none";
+      liveEvents.innerHTML = "";
+      liveDubbi.innerHTML = "";
+
+      try {
+        const response = await fetch(WORKER_URL + "?url=" + encodeURIComponent(schoolUrl));
+        const data = await response.json();
+
+        if (!data.ok) {
+          result.textContent = data.message || "Errore durante l’analisi.";
+          return;
+        }
+
+        result.textContent = data.message;
+        liveResults.style.display = "block";
+
+        renderWorkerItems(data.events || [], "liveEvents", false);
+        renderWorkerItems(data.dubbi || [], "liveDubbi", true);
+
+      } catch (error) {
+        result.textContent = "Impossibile contattare il Worker.";
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function renderWorkerItems(items, elementId, isDubbio) {
+      const container = document.getElementById(elementId);
+
+      if (!items.length) {
+        container.innerHTML = "<p>Nessun elemento trovato.</p>";
+        return;
+      }
+
+      container.innerHTML = items.map(item => `
+        <div class="event ${isDubbio ? "dubbi" : ""}">
+          <strong>${escapeHtml(item.title || "Titolo non trovato")}</strong><br>
+          Data: ${escapeHtml(item.date || "data non trovata")}<br>
+          Orario: ${escapeHtml(item.startTime || "orario non trovato")} ${item.endTime ? "- " + escapeHtml(item.endTime) : ""}<br>
+          ${item.reason ? "Motivo: " + escapeHtml(item.reason) + "<br>" : ""}
+          <span class="source-link">
+            Fonte:
+            <a href="${escapeAttribute(item.sourceUrl || "#")}" target="_blank" rel="noopener noreferrer">
+              apri circolare
+            </a>
+          </span>
+        </div>
+      `).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value);
+    }
+
+    loadJson("events.json", "events", false);
+    loadJson("dubbi.json", "dubbi", true);
   </script>
 </body>
 </html>

@@ -75,6 +75,11 @@
       background: #084298;
     }
 
+    button:disabled {
+      background: #8bb8f5;
+      cursor: not-allowed;
+    }
+
     .event {
       border-left: 6px solid #0d6efd;
       padding: 14px;
@@ -93,14 +98,32 @@
       border-left: 6px solid #0d6efd;
     }
 
+    .error {
+      background: #ffe8e8;
+      border-left: 6px solid #dc3545;
+    }
+
     .small {
       color: #5f6f82;
+      font-size: 14px;
+    }
+
+    .result-title {
+      margin-top: 0;
+    }
+
+    .source-link {
+      word-break: break-word;
       font-size: 14px;
     }
 
     #apiResult {
       margin-top: 14px;
       font-weight: bold;
+    }
+
+    #liveResults {
+      display: none;
     }
   </style>
 </head>
@@ -114,29 +137,44 @@
   <main>
     <section class="box">
       <h2>Analizza un sito scuola</h2>
-      <p>Inserisci l’indirizzo pubblico della pagina circolari della scuola.</p>
+      <p>Inserisci l’indirizzo pubblico della pagina circolari o di una singola circolare.</p>
 
       <div class="url-row">
-        <input id="schoolUrl" type="url" placeholder="https://www.scuola.edu.it/circolari" />
-        <button onclick="analyzeSchool()">Analizza circolari</button>
+        <input
+          id="schoolUrl"
+          type="url"
+          value="https://comprensivoprimolevi.edu.it/circolare/assemblea-sindacale-di-istituto-per-il-giorno-28-novembre-2023-ore-800-1000/"
+          placeholder="https://www.scuola.edu.it/circolari"
+        />
+        <button id="analyzeButton" onclick="analyzeSchool()">Analizza circolari</button>
       </div>
 
       <div id="apiResult" class="small"></div>
     </section>
 
+    <section id="liveResults" class="box">
+      <h2 class="result-title">Risultato analisi online</h2>
+
+      <h3>Eventi trovati</h3>
+      <div id="liveEvents"></div>
+
+      <h3>Eventi da verificare</h3>
+      <div id="liveDubbi"></div>
+    </section>
+
     <section class="box">
       <h2>Calendario</h2>
-      <p>Scarica il calendario generato da CircolariSync.</p>
+      <p>Scarica il calendario demo generato da CircolariSync.</p>
       <a class="button" href="calendar.ics" download>Scarica calendar.ics</a>
     </section>
 
     <section class="box">
-      <h2>Eventi sicuri</h2>
+      <h2>Eventi sicuri demo</h2>
       <div id="events">Caricamento eventi...</div>
     </section>
 
     <section class="box dubbi">
-      <h2>Eventi da verificare</h2>
+      <h2>Eventi da verificare demo</h2>
       <div id="dubbi">Caricamento dubbi...</div>
     </section>
 
@@ -167,10 +205,10 @@
 
         container.innerHTML = data.map(item => `
           <div class="event ${isDubbio ? "dubbi" : ""}">
-            <strong>${item.titolo}</strong><br>
-            Data: ${item.data || "data non trovata"}<br>
-            Orario: ${item.ora_inizio || "orario non trovato"} ${item.ora_fine ? "- " + item.ora_fine : ""}<br>
-            Circolare: ${item.circolare}
+            <strong>${escapeHtml(item.titolo)}</strong><br>
+            Data: ${escapeHtml(item.data || "data non trovata")}<br>
+            Orario: ${escapeHtml(item.ora_inizio || "orario non trovato")} ${item.ora_fine ? "- " + escapeHtml(item.ora_fine) : ""}<br>
+            Circolare: ${escapeHtml(item.circolare)}
           </div>
         `).join("");
       } catch (error) {
@@ -181,6 +219,11 @@
     async function analyzeSchool() {
       const input = document.getElementById("schoolUrl");
       const result = document.getElementById("apiResult");
+      const button = document.getElementById("analyzeButton");
+      const liveResults = document.getElementById("liveResults");
+      const liveEvents = document.getElementById("liveEvents");
+      const liveDubbi = document.getElementById("liveDubbi");
+
       const schoolUrl = input.value.trim();
 
       if (!schoolUrl.startsWith("http://") && !schoolUrl.startsWith("https://")) {
@@ -188,20 +231,69 @@
         return;
       }
 
-      result.textContent = "Contatto l’API CircolariSync...";
+      result.textContent = "Analisi in corso...";
+      button.disabled = true;
+      liveResults.style.display = "none";
+      liveEvents.innerHTML = "";
+      liveDubbi.innerHTML = "";
 
       try {
         const response = await fetch(WORKER_URL + "?url=" + encodeURIComponent(schoolUrl));
         const data = await response.json();
 
-        if (data.ok) {
-          result.textContent = data.message;
-        } else {
-          result.textContent = "Errore durante l’analisi.";
+        if (!data.ok) {
+          result.textContent = data.message || "Errore durante l’analisi.";
+          return;
         }
+
+        result.textContent = data.message;
+        liveResults.style.display = "block";
+
+        renderWorkerItems(data.events || [], "liveEvents", false);
+        renderWorkerItems(data.dubbi || [], "liveDubbi", true);
+
       } catch (error) {
         result.textContent = "Impossibile contattare il Worker.";
+      } finally {
+        button.disabled = false;
       }
+    }
+
+    function renderWorkerItems(items, elementId, isDubbio) {
+      const container = document.getElementById(elementId);
+
+      if (!items.length) {
+        container.innerHTML = "<p>Nessun elemento trovato.</p>";
+        return;
+      }
+
+      container.innerHTML = items.map(item => `
+        <div class="event ${isDubbio ? "dubbi" : ""}">
+          <strong>${escapeHtml(item.title || "Titolo non trovato")}</strong><br>
+          Data: ${escapeHtml(item.date || "data non trovata")}<br>
+          Orario: ${escapeHtml(item.startTime || "orario non trovato")} ${item.endTime ? "- " + escapeHtml(item.endTime) : ""}<br>
+          ${item.reason ? "Motivo: " + escapeHtml(item.reason) + "<br>" : ""}
+          <span class="source-link">
+            Fonte:
+            <a href="${escapeAttribute(item.sourceUrl || "#")}" target="_blank" rel="noopener noreferrer">
+              apri circolare
+            </a>
+          </span>
+        </div>
+      `).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value);
     }
 
     loadJson("events.json", "events", false);
