@@ -2,10 +2,28 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: corsHeaders(),
+      });
+    }
+
     if (url.pathname === "/api/analyze") {
+      const schoolUrl = url.searchParams.get("url");
+
+      if (!schoolUrl) {
+        return Response.json({
+          ok: false,
+          message: "URL scuola mancante",
+        }, {
+          headers: corsHeaders(),
+        });
+      }
+
       return Response.json({
         ok: true,
-        message: "API CircolariSync attiva",
+        message: "URL ricevuto correttamente",
+        url: schoolUrl,
         events: [],
         dubbi: [],
       }, {
