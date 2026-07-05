@@ -114,22 +114,30 @@
       line-height: 1.55;
     }
 
-    .url-row {
-      display: flex;
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px;
       gap: 12px;
-      flex-wrap: wrap;
       margin-top: 18px;
     }
 
+    .field label {
+      display: block;
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 7px;
+      color: var(--text);
+    }
+
     input {
-      flex: 1;
-      min-width: 260px;
+      width: 100%;
       padding: 15px 16px;
       border-radius: 14px;
       border: 1px solid var(--border);
       font-size: 16px;
       color: var(--text);
       outline: none;
+      background: white;
     }
 
     input:focus {
@@ -169,6 +177,15 @@
 
     .button.secondary:hover {
       background: var(--green-light);
+    }
+
+    .button.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .main-action {
+      margin-top: 16px;
     }
 
     .how {
@@ -269,10 +286,27 @@
     }
 
     .actions {
-      display: flex;
+      display: none;
       flex-wrap: wrap;
       gap: 10px;
       margin-top: 16px;
+    }
+
+    .calendar-url-box {
+      display: none;
+      margin-top: 16px;
+      background: var(--green-light);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .calendar-url-box code {
+      display: block;
+      margin-top: 8px;
+      word-break: break-all;
+      color: var(--green-dark);
+      font-size: 13px;
     }
 
     #apiResult {
@@ -292,7 +326,7 @@
       font-size: 14px;
     }
 
-    @media (max-width: 760px) {
+    @media (max-width: 860px) {
       .hero {
         grid-template-columns: 1fr;
       }
@@ -301,6 +335,7 @@
         font-size: 38px;
       }
 
+      .form-grid,
       .how,
       .stats {
         grid-template-columns: 1fr;
@@ -326,7 +361,7 @@
         <strong>Da una pagina pubblica a un calendario più semplice.</strong>
         <span>
           CircolariSync legge le circolari pubbliche della scuola, individua gli eventi
-          e segnala quelli da verificare quando mancano informazioni.
+          e genera un calendario aggiornabile tramite link.
         </span>
       </div>
     </div>
@@ -334,19 +369,35 @@
 
   <main>
     <section class="box">
-      <h2>Analizza le circolari della scuola</h2>
+      <h2>Crea il calendario scolastico</h2>
       <p>
-        Inserisci l’indirizzo pubblico della pagina circolari o di una singola circolare.
-        Il sistema analizzerà solo pagine pubbliche e mostrerà eventi trovati e dubbi.
+        Inserisci l’indirizzo pubblico della pagina circolari e scegli il periodo da seguire.
+        Per esempio, da settembre a giugno dell’anno scolastico.
       </p>
 
-      <div class="url-row">
-        <input
-          id="schoolUrl"
-          type="url"
-          value="https://comprensivoprimolevi.edu.it/circolare/"
-          placeholder="https://www.scuola.edu.it/circolare/"
-        />
+      <div class="form-grid">
+        <div class="field">
+          <label for="schoolUrl">Pagina circolari</label>
+          <input
+            id="schoolUrl"
+            type="url"
+            value="https://comprensivoprimolevi.edu.it/circolare/"
+            placeholder="https://www.scuola.edu.it/circolare/"
+          />
+        </div>
+
+        <div class="field">
+          <label for="fromDate">Data inizio</label>
+          <input id="fromDate" type="date" value="2026-09-01" />
+        </div>
+
+        <div class="field">
+          <label for="toDate">Data fine</label>
+          <input id="toDate" type="date" value="2027-06-30" />
+        </div>
+      </div>
+
+      <div class="main-action">
         <button id="analyzeButton" onclick="analyzeSchool()">Analizza circolari</button>
       </div>
 
@@ -359,12 +410,20 @@
         </div>
         <div class="stat">
           <strong id="statEvents">0</strong>
-          <span>eventi trovati</span>
+          <span>eventi con orario</span>
         </div>
         <div class="stat">
           <strong id="statDubbi">0</strong>
-          <span>eventi da verificare</span>
+          <span>eventi senza orario</span>
         </div>
+      </div>
+
+      <div id="calendarUrlBox" class="calendar-url-box">
+        <strong>Link calendario aggiornabile</strong>
+        <p class="small">
+          Puoi usare questo link per iscriverti da Google Calendar, Apple Calendar o altre app compatibili.
+        </p>
+        <code id="calendarUrlText"></code>
       </div>
     </section>
 
@@ -375,19 +434,19 @@
         <div class="step">
           <span class="step-number">1</span>
           <h3>Incolla il link</h3>
-          <p>Usa la pagina pubblica delle circolari o il link di una singola circolare.</p>
+          <p>Usa la pagina pubblica delle circolari della scuola.</p>
         </div>
 
         <div class="step">
           <span class="step-number">2</span>
-          <h3>Analizza il testo</h3>
-          <p>CircolariSync cerca date, orari e informazioni utili negli avvisi pubblici.</p>
+          <h3>Scegli il periodo</h3>
+          <p>Imposta le date dell’anno scolastico o del periodo che ti interessa.</p>
         </div>
 
         <div class="step">
           <span class="step-number">3</span>
-          <h3>Controlla i risultati</h3>
-          <p>Gli eventi chiari vengono separati da quelli da verificare manualmente.</p>
+          <h3>Scarica o copia il calendario</h3>
+          <p>Gli eventi chiari entrano nel calendario, quelli senza orario diventano eventi giornalieri.</p>
         </div>
       </div>
     </section>
@@ -395,15 +454,16 @@
     <section id="liveResults" class="box">
       <h2 class="result-title">Risultato analisi</h2>
 
-      <div class="actions">
-        <a class="button" href="calendar.ics" download>Scarica calendario</a>
-        <a class="button secondary" href="calendar.ics">Apri calendar.ics</a>
+      <div id="calendarActions" class="actions">
+        <a id="downloadCalendarButton" class="button" href="#">Scarica calendario</a>
+        <a id="openCalendarButton" class="button secondary" href="#" target="_blank" rel="noopener noreferrer">Apri calendar.ics</a>
+        <button type="button" onclick="copyCalendarUrl()">Copia link calendario</button>
       </div>
 
-      <h3>Eventi trovati</h3>
+      <h3>Eventi con orario</h3>
       <div id="liveEvents"></div>
 
-      <h3>Eventi da verificare</h3>
+      <h3>Eventi senza orario o da verificare</h3>
       <div id="liveDubbi"></div>
     </section>
 
@@ -422,21 +482,42 @@
   </footer>
 
   <script>
-    const WORKER_URL = "https://circolari-sync-worker.circolari-sync-dramof22.workers.dev/api/analyze";
+    const WORKER_BASE_URL = "https://circolari-sync-worker.circolari-sync-dramof22.workers.dev";
+    const ANALYZE_URL = WORKER_BASE_URL + "/api/analyze";
+    const CALENDAR_URL = WORKER_BASE_URL + "/calendar.ics";
+
+    let currentCalendarUrl = "";
 
     async function analyzeSchool() {
       const input = document.getElementById("schoolUrl");
+      const fromInput = document.getElementById("fromDate");
+      const toInput = document.getElementById("toDate");
       const result = document.getElementById("apiResult");
       const button = document.getElementById("analyzeButton");
       const liveResults = document.getElementById("liveResults");
       const liveEvents = document.getElementById("liveEvents");
       const liveDubbi = document.getElementById("liveDubbi");
       const analysisStats = document.getElementById("analysisStats");
+      const calendarActions = document.getElementById("calendarActions");
+      const calendarUrlBox = document.getElementById("calendarUrlBox");
+      const calendarUrlText = document.getElementById("calendarUrlText");
 
       const schoolUrl = input.value.trim();
+      const from = fromInput.value;
+      const to = toInput.value;
 
       if (!schoolUrl.startsWith("http://") && !schoolUrl.startsWith("https://")) {
         result.textContent = "Inserisci un URL valido che inizi con http:// o https://";
+        return;
+      }
+
+      if (!from || !to) {
+        result.textContent = "Inserisci sia la data di inizio sia la data di fine.";
+        return;
+      }
+
+      if (from > to) {
+        result.textContent = "La data di inizio non può essere successiva alla data di fine.";
         return;
       }
 
@@ -444,11 +525,14 @@
       button.disabled = true;
       liveResults.style.display = "none";
       analysisStats.style.display = "none";
+      calendarActions.style.display = "none";
+      calendarUrlBox.style.display = "none";
       liveEvents.innerHTML = "";
       liveDubbi.innerHTML = "";
 
       try {
-        const response = await fetch(WORKER_URL + "?url=" + encodeURIComponent(schoolUrl));
+        const analyzeUrl = buildAnalyzeUrl(schoolUrl, from, to);
+        const response = await fetch(analyzeUrl);
         const data = await response.json();
 
         if (!data.ok) {
@@ -460,13 +544,21 @@
         const dubbi = data.dubbi || [];
         const analyzedCount = data.analyzedCount || 1;
 
+        currentCalendarUrl = buildCalendarUrl(schoolUrl, from, to);
+
         result.textContent = data.message;
         liveResults.style.display = "block";
         analysisStats.style.display = "grid";
+        calendarActions.style.display = "flex";
+        calendarUrlBox.style.display = "block";
 
         document.getElementById("statAnalyzed").textContent = analyzedCount;
         document.getElementById("statEvents").textContent = events.length;
         document.getElementById("statDubbi").textContent = dubbi.length;
+
+        document.getElementById("downloadCalendarButton").href = currentCalendarUrl;
+        document.getElementById("openCalendarButton").href = currentCalendarUrl;
+        calendarUrlText.textContent = currentCalendarUrl;
 
         renderWorkerItems(events, "liveEvents", false);
         renderWorkerItems(dubbi, "liveDubbi", true);
@@ -475,6 +567,39 @@
         result.textContent = "Impossibile contattare il Worker.";
       } finally {
         button.disabled = false;
+      }
+    }
+
+    function buildAnalyzeUrl(schoolUrl, from, to) {
+      const params = new URLSearchParams({
+        url: schoolUrl,
+        from,
+        to
+      });
+
+      return ANALYZE_URL + "?" + params.toString();
+    }
+
+    function buildCalendarUrl(schoolUrl, from, to) {
+      const params = new URLSearchParams({
+        url: schoolUrl,
+        from,
+        to
+      });
+
+      return CALENDAR_URL + "?" + params.toString();
+    }
+
+    async function copyCalendarUrl() {
+      if (!currentCalendarUrl) {
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(currentCalendarUrl);
+        document.getElementById("apiResult").textContent = "Link calendario copiato.";
+      } catch (error) {
+        document.getElementById("apiResult").textContent = "Non riesco a copiare automaticamente il link. Puoi copiarlo dal riquadro.";
       }
     }
 
@@ -490,8 +615,8 @@
         <div class="event ${isDubbio ? "dubbi" : ""}">
           <strong>${escapeHtml(item.title || "Titolo non trovato")}</strong><br>
           Data: ${escapeHtml(item.date || "data non trovata")}<br>
-          Orario: ${escapeHtml(item.startTime || "orario non trovato")} ${item.endTime ? "- " + escapeHtml(item.endTime) : ""}<br>
-          ${item.reason ? "Motivo: " + escapeHtml(item.reason) + "<br>" : ""}
+          Orario: ${escapeHtml(item.startTime || "giornata intera")} ${item.endTime ? "- " + escapeHtml(item.endTime) : ""}<br>
+          ${item.reason ? "Nota: " + escapeHtml(item.reason) + "<br>" : ""}
           <span class="source-link">
             Fonte:
             <a href="${escapeAttribute(item.sourceUrl || "#")}" target="_blank" rel="noopener noreferrer">
