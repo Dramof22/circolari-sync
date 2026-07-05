@@ -6,105 +6,256 @@
   <title>CircolariSync</title>
 
   <style>
+    :root {
+      --green-dark: #064e3b;
+      --green: #0f766e;
+      --green-soft: #dff7ef;
+      --green-light: #ecfdf5;
+      --text: #12312a;
+      --muted: #5f746f;
+      --card: #ffffff;
+      --border: #cfe7dd;
+      --warning-bg: #fff7d6;
+      --warning: #b7791f;
+      --error: #dc3545;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #f4f8ff;
-      color: #16324f;
+      background: linear-gradient(180deg, #f2fbf7 0%, #ffffff 55%);
+      color: var(--text);
     }
 
     header {
-      background: linear-gradient(135deg, #0d6efd, #084298);
+      background: linear-gradient(135deg, var(--green-dark), var(--green));
       color: white;
-      padding: 40px 20px;
-      text-align: center;
+      padding: 56px 20px 64px;
     }
 
-    header h1 {
+    .hero {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.28);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
       margin: 0;
-      font-size: 42px;
+      font-size: 48px;
+      line-height: 1.05;
+      letter-spacing: -1px;
     }
 
-    header p {
-      margin-top: 10px;
+    .hero p {
+      margin: 18px 0 0;
+      font-size: 20px;
+      line-height: 1.45;
+      color: #e8fff7;
+    }
+
+    .hero-card {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.18);
+    }
+
+    .hero-card strong {
+      display: block;
       font-size: 18px;
+      margin-bottom: 10px;
+    }
+
+    .hero-card span {
+      display: block;
+      color: #e8fff7;
+      line-height: 1.5;
     }
 
     main {
-      max-width: 900px;
-      margin: 30px auto;
+      max-width: 980px;
+      margin: -34px auto 40px;
       padding: 0 20px;
     }
 
     .box {
-      background: white;
-      border-radius: 16px;
-      padding: 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 26px;
       margin-bottom: 24px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      box-shadow: 0 14px 38px rgba(6, 78, 59, 0.09);
+    }
+
+    .box h2 {
+      margin-top: 0;
+      font-size: 26px;
+    }
+
+    .box p {
+      line-height: 1.55;
     }
 
     .url-row {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       flex-wrap: wrap;
+      margin-top: 18px;
     }
 
     input {
       flex: 1;
       min-width: 260px;
-      padding: 14px;
-      border-radius: 10px;
-      border: 1px solid #b7c9e2;
+      padding: 15px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
       font-size: 16px;
+      color: var(--text);
+      outline: none;
     }
 
-    button, .button {
-      background: #0d6efd;
+    input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+    }
+
+    button,
+    .button {
+      background: var(--green-dark);
       color: white;
       border: none;
-      padding: 14px 18px;
-      border-radius: 10px;
+      padding: 15px 19px;
+      border-radius: 14px;
       font-size: 16px;
       cursor: pointer;
       text-decoration: none;
       display: inline-block;
+      font-weight: bold;
     }
 
-    button:hover, .button:hover {
-      background: #084298;
+    button:hover,
+    .button:hover {
+      background: var(--green);
     }
 
     button:disabled {
-      background: #8bb8f5;
+      background: #8bb8ad;
       cursor: not-allowed;
     }
 
+    .button.secondary {
+      background: white;
+      color: var(--green-dark);
+      border: 1px solid var(--border);
+    }
+
+    .button.secondary:hover {
+      background: var(--green-light);
+    }
+
+    .how {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .step {
+      background: var(--green-light);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      background: var(--green-dark);
+      color: white;
+      border-radius: 999px;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+
+    .step h3 {
+      margin: 0 0 8px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .stats {
+      display: none;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .stat {
+      background: var(--green-light);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 28px;
+      color: var(--green-dark);
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     .event {
-      border-left: 6px solid #0d6efd;
-      padding: 14px;
+      border-left: 6px solid var(--green);
+      padding: 15px;
       margin: 12px 0;
-      background: #eef5ff;
-      border-radius: 10px;
+      background: var(--green-light);
+      border-radius: 12px;
     }
 
     .dubbi {
-      background: #fff7d6;
-      border-left: 6px solid #ffc107;
+      background: var(--warning-bg);
+      border-left: 6px solid var(--warning);
     }
 
     .notice {
-      background: #eaf2ff;
-      border-left: 6px solid #0d6efd;
+      background: #f6fbf8;
+      border-left: 6px solid var(--green-dark);
     }
 
     .error {
       background: #ffe8e8;
-      border-left: 6px solid #dc3545;
+      border-left: 6px solid var(--error);
     }
 
     .small {
-      color: #5f6f82;
+      color: var(--muted);
       font-size: 14px;
     }
 
@@ -117,6 +268,13 @@
       font-size: 14px;
     }
 
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
     #apiResult {
       margin-top: 14px;
       font-weight: bold;
@@ -125,35 +283,122 @@
     #liveResults {
       display: none;
     }
+
+    footer {
+      max-width: 980px;
+      margin: 20px auto 40px;
+      padding: 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 760px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 38px;
+      }
+
+      .how,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        margin-top: -24px;
+      }
+    }
   </style>
 </head>
 
 <body>
   <header>
-    <h1>CircolariSync</h1>
-    <p>Legge circolari pubbliche e genera un calendario aggiornabile</p>
+    <div class="hero">
+      <div>
+        <span class="badge">Per genitori, docenti e scuole</span>
+        <h1>CircolariSync</h1>
+        <p>Incolla il link delle circolari e trova subito date, orari ed eventi.</p>
+      </div>
+
+      <div class="hero-card">
+        <strong>Da una pagina pubblica a un calendario più semplice.</strong>
+        <span>
+          CircolariSync legge le circolari pubbliche della scuola, individua gli eventi
+          e segnala quelli da verificare quando mancano informazioni.
+        </span>
+      </div>
+    </div>
   </header>
 
   <main>
     <section class="box">
-      <h2>Analizza un sito scuola</h2>
-      <p>Inserisci l’indirizzo pubblico della pagina circolari o di una singola circolare.</p>
+      <h2>Analizza le circolari della scuola</h2>
+      <p>
+        Inserisci l’indirizzo pubblico della pagina circolari o di una singola circolare.
+        Il sistema analizzerà solo pagine pubbliche e mostrerà eventi trovati e dubbi.
+      </p>
 
       <div class="url-row">
         <input
           id="schoolUrl"
           type="url"
-          value="https://comprensivoprimolevi.edu.it/circolare/assemblea-sindacale-di-istituto-per-il-giorno-28-novembre-2023-ore-800-1000/"
-          placeholder="https://www.scuola.edu.it/circolari"
+          value="https://comprensivoprimolevi.edu.it/circolare/"
+          placeholder="https://www.scuola.edu.it/circolare/"
         />
         <button id="analyzeButton" onclick="analyzeSchool()">Analizza circolari</button>
       </div>
 
       <div id="apiResult" class="small"></div>
+
+      <div id="analysisStats" class="stats">
+        <div class="stat">
+          <strong id="statAnalyzed">0</strong>
+          <span>circolari analizzate</span>
+        </div>
+        <div class="stat">
+          <strong id="statEvents">0</strong>
+          <span>eventi trovati</span>
+        </div>
+        <div class="stat">
+          <strong id="statDubbi">0</strong>
+          <span>eventi da verificare</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="box">
+      <h2>Come funziona</h2>
+
+      <div class="how">
+        <div class="step">
+          <span class="step-number">1</span>
+          <h3>Incolla il link</h3>
+          <p>Usa la pagina pubblica delle circolari o il link di una singola circolare.</p>
+        </div>
+
+        <div class="step">
+          <span class="step-number">2</span>
+          <h3>Analizza il testo</h3>
+          <p>CircolariSync cerca date, orari e informazioni utili negli avvisi pubblici.</p>
+        </div>
+
+        <div class="step">
+          <span class="step-number">3</span>
+          <h3>Controlla i risultati</h3>
+          <p>Gli eventi chiari vengono separati da quelli da verificare manualmente.</p>
+        </div>
+      </div>
     </section>
 
     <section id="liveResults" class="box">
-      <h2 class="result-title">Risultato analisi online</h2>
+      <h2 class="result-title">Risultato analisi</h2>
+
+      <div class="actions">
+        <a class="button" href="calendar.ics" download>Scarica calendario</a>
+        <a class="button secondary" href="calendar.ics">Apri calendar.ics</a>
+      </div>
 
       <h3>Eventi trovati</h3>
       <div id="liveEvents"></div>
@@ -162,59 +407,22 @@
       <div id="liveDubbi"></div>
     </section>
 
-    <section class="box">
-      <h2>Calendario</h2>
-      <p>Scarica il calendario demo generato da CircolariSync.</p>
-      <a class="button" href="calendar.ics" download>Scarica calendar.ics</a>
-    </section>
-
-    <section class="box">
-      <h2>Eventi sicuri demo</h2>
-      <div id="events">Caricamento eventi...</div>
-    </section>
-
-    <section class="box dubbi">
-      <h2>Eventi da verificare demo</h2>
-      <div id="dubbi">Caricamento dubbi...</div>
-    </section>
-
     <section class="box notice">
-      <h2>Attenzione</h2>
+      <h2>Uso responsabile</h2>
       <p>
-        CircolariSync non sostituisce il sito ufficiale della scuola,
-        il registro elettronico o le comunicazioni ufficiali.
-        Gli eventi estratti automaticamente devono sempre essere verificati.
+        CircolariSync non sostituisce il sito ufficiale della scuola, il registro elettronico
+        o le comunicazioni ufficiali. Gli eventi estratti automaticamente devono sempre
+        essere verificati prima di essere considerati definitivi.
       </p>
     </section>
   </main>
 
+  <footer>
+    CircolariSync legge solo pagine pubbliche. Non usa login, database o aree riservate.
+  </footer>
+
   <script>
     const WORKER_URL = "https://circolari-sync-worker.circolari-sync-dramof22.workers.dev/api/analyze";
-
-    async function loadJson(file, elementId, isDubbio) {
-      const container = document.getElementById(elementId);
-
-      try {
-        const response = await fetch(file);
-        const data = await response.json();
-
-        if (!data.length) {
-          container.innerHTML = "<p>Nessun elemento trovato.</p>";
-          return;
-        }
-
-        container.innerHTML = data.map(item => `
-          <div class="event ${isDubbio ? "dubbi" : ""}">
-            <strong>${escapeHtml(item.titolo)}</strong><br>
-            Data: ${escapeHtml(item.data || "data non trovata")}<br>
-            Orario: ${escapeHtml(item.ora_inizio || "orario non trovato")} ${item.ora_fine ? "- " + escapeHtml(item.ora_fine) : ""}<br>
-            Circolare: ${escapeHtml(item.circolare)}
-          </div>
-        `).join("");
-      } catch (error) {
-        container.innerHTML = "<p>Errore nel caricamento dei dati.</p>";
-      }
-    }
 
     async function analyzeSchool() {
       const input = document.getElementById("schoolUrl");
@@ -223,6 +431,7 @@
       const liveResults = document.getElementById("liveResults");
       const liveEvents = document.getElementById("liveEvents");
       const liveDubbi = document.getElementById("liveDubbi");
+      const analysisStats = document.getElementById("analysisStats");
 
       const schoolUrl = input.value.trim();
 
@@ -234,6 +443,7 @@
       result.textContent = "Analisi in corso...";
       button.disabled = true;
       liveResults.style.display = "none";
+      analysisStats.style.display = "none";
       liveEvents.innerHTML = "";
       liveDubbi.innerHTML = "";
 
@@ -246,11 +456,20 @@
           return;
         }
 
+        const events = data.events || [];
+        const dubbi = data.dubbi || [];
+        const analyzedCount = data.analyzedCount || 1;
+
         result.textContent = data.message;
         liveResults.style.display = "block";
+        analysisStats.style.display = "grid";
 
-        renderWorkerItems(data.events || [], "liveEvents", false);
-        renderWorkerItems(data.dubbi || [], "liveDubbi", true);
+        document.getElementById("statAnalyzed").textContent = analyzedCount;
+        document.getElementById("statEvents").textContent = events.length;
+        document.getElementById("statDubbi").textContent = dubbi.length;
+
+        renderWorkerItems(events, "liveEvents", false);
+        renderWorkerItems(dubbi, "liveDubbi", true);
 
       } catch (error) {
         result.textContent = "Impossibile contattare il Worker.";
@@ -295,9 +514,6 @@
     function escapeAttribute(value) {
       return escapeHtml(value);
     }
-
-    loadJson("events.json", "events", false);
-    loadJson("dubbi.json", "dubbi", true);
   </script>
 </body>
 </html>
