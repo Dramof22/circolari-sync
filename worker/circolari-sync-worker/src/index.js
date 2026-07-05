@@ -400,7 +400,7 @@ async function analyzeCircularLinks(linksData, from, to, options = {}) {
       const htmlOnlyText = normalizeExtractedPdfSpacing(htmlMainText);
       const htmlOnlyAnalysis = analyzeText(htmlOnlyText, link.url);
       const htmlOnlyFiltered = filterAnalysisByRange(htmlOnlyAnalysis, from, to);
-      const shouldTryPdf = shouldReadPdfForArchiveItem(htmlOnlyFiltered, circularPdfLinksFound);
+      const shouldTryPdf = shouldReadPdfForArchiveItem(htmlOnlyFiltered, circularPdfLinksFound, link);
 
       if (readPdfAttachments && shouldTryPdf && pdfReadsAttempted < maxPdfReads) {
         const remainingPdfReads = maxPdfReads - pdfReadsAttempted;
@@ -942,8 +942,44 @@ function analyzeText(text, sourceUrl) {
   };
 }
 
-function shouldReadPdfForArchiveItem(filteredAnalysis, pdfLinksFound) {
+function shouldReadPdfForArchiveItem(filteredAnalysis, pdfLinksFound, link) {
   if (pdfLinksFound <= 0) {
+    return false;
+  }
+
+  const linkText = `${link.title || ""} ${link.url || ""}`.toLowerCase();
+
+  const highPriorityWords = [
+    "convocazione",
+    "collegio",
+    "consiglio",
+    "consigli",
+    "scrutinio",
+    "scrutini",
+    "riunione",
+    "incontro",
+    "dipartimenti",
+    "glo",
+    "gli",
+    "glh"
+  ];
+
+  const lowPriorityWords = [
+    "assemblea sindacale",
+    "assemblea usb",
+    "flc cgil",
+    "pubblicazione esiti",
+    "calendario scolastico",
+    "trasmissione",
+    "monitoraggio",
+    "salvataggio materiali",
+    "decreti di liquidazione"
+  ];
+
+  const hasHighPriorityWord = highPriorityWords.some((word) => linkText.includes(word));
+  const hasLowPriorityWord = lowPriorityWords.some((word) => linkText.includes(word));
+
+  if (!hasHighPriorityWord || hasLowPriorityWord) {
     return false;
   }
 
