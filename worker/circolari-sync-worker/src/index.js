@@ -42,38 +42,87 @@ export default {
     }
 
     try {
-      const pageResponse = await fetch(schoolUrl, {
-        headers: {
-          "User-Agent": "circolari-sync/0.1"
-        }
-      });
+      const firstPage = await readPage(schoolUrl, parsedSchoolUrl);
 
-      if (!pageResponse.ok) {
+      const allLinks = extractLinks(firstPage.html, parsedSchoolUrl);
+      const circularLinks = filterCircularLinks(allLinks);
+      const realCircularLinks = filterRealCircularPages(circularLinks, parsedSchoolUrl);
+
+      const isArchive = realCircularLinks.length > 1 && looksLikeCircularArchive(parsedSchoolUrl);
+
+      if (isArchive) {
+        const maxCircolari = 5;
+        const selectedLinks = realCircularLinks.slice(0, maxCircolari);
+
+        const events = [];
+        const dubbi = [];
+        const analyzedPages = [];
+
+        for (const link of selectedLinks) {
+          try {
+            const circularPage = await readPage(link.url, new URL(link.url));
+            const pageText = extractCleanText(circularPage.html);
+            const mainText = extractMainCircularText(pageText);
+            const analysis = analyzeText(mainText, link.url);
+
+            events.push(...analysis.events);
+            dubbi.push(...analysis.dubbi);
+
+            analyzedPages.push({
+              title: link.title,
+              url: link.url,
+              ok: true,
+              mainTextLength: mainText.length
+            });
+          } catch (error) {
+            dubbi.push({
+              title: link.title,
+              date: null,
+              startTime: null,
+              endTime: null,
+              sourceUrl: link.url,
+              reason: "errore lettura circolare"
+            });
+
+            analyzedPages.push({
+              title: link.title,
+              url: link.url,
+              ok: false,
+              error: String(error)
+            });
+          }
+        }
+
         return jsonResponse({
-          ok: false,
-          message: "Non riesco a leggere la pagina indicata",
+          ok: true,
+          message: "Archivio letto correttamente",
+          mode: "archive",
           url: schoolUrl,
-          status: pageResponse.status,
-          events: [],
-          dubbi: []
-        }, 502);
+          contentType: firstPage.contentType,
+          htmlLength: firstPage.html.length,
+          linksFound: allLinks.length,
+          circularLinksFound: circularLinks.length,
+          realCircularLinksFound: realCircularLinks.length,
+          maxCircolari,
+          analyzedCount: selectedLinks.length,
+          circularLinks: selectedLinks,
+          analyzedPages,
+          events,
+          dubbi
+        });
       }
 
-      const contentType = pageResponse.headers.get("content-type") || "";
-      const html = await pageResponse.text();
-
-      const allLinks = extractLinks(html, parsedSchoolUrl);
-      const circularLinks = filterCircularLinks(allLinks);
-      const pageText = extractCleanText(html);
+      const pageText = extractCleanText(firstPage.html);
       const mainText = extractMainCircularText(pageText);
       const analysis = analyzeText(mainText, schoolUrl);
 
       return jsonResponse({
         ok: true,
         message: "Pagina letta correttamente",
+        mode: "single",
         url: schoolUrl,
-        contentType,
-        htmlLength: html.length,
+        contentType: firstPage.contentType,
+        htmlLength: firstPage.html.length,
         textLength: pageText.length,
         mainTextLength: mainText.length,
         mainTextPreview: mainText.slice(0, 2000),
@@ -96,6 +145,28 @@ export default {
     }
   }
 };
+
+async function readPage(pageUrl, baseUrl) {
+  const pageResponse = await fetch(pageUrl, {
+    headers: {
+      "User-Agent": "circolari-sync/0.1"
+    }
+  });
+
+  if (!pageResponse.ok) {
+    throw new Error(`Pagina non leggibile, status ${pageResponse.status}`);
+  }
+
+  const contentType = pageResponse.headers.get("content-type") || "";
+  const html = await pageResponse.text();
+
+  return {
+    url: pageUrl,
+    baseUrl,
+    contentType,
+    html
+  };
+}
 
 function extractLinks(html, baseUrl) {
   const links = [];
@@ -158,6 +229,67 @@ function filterCircularLinks(links) {
       text.includes("avvisi")
     );
   });
+}
+
+function filterRealCircularPages(links, baseUrl) {
+  const baseHost = baseUrl.hostname;
+  const seen = new Set();
+  const result = [];
+
+  for (const link of links) {
+    let parsedUrl;
+
+    try {
+      parsedUrl = new URL(link.url);
+    } catch (error) {
+      continue;
+    }
+
+    if (parsedUrl.hostname !== baseHost) {
+      continue;
+    }
+
+    if (!parsedUrl.pathname.startsWith("/circolare/")) {
+      continue;
+    }
+
+    if (parsedUrl.pathname === "/circolare/") {
+      continue;
+    }
+
+    if (/^\/circolare\/page\/\d+\/?$/.test(parsedUrl.pathname)) {
+      continue;
+    }
+
+    if (parsedUrl.searchParams.has("pdf")) {
+      continue;
+    }
+
+    if (seen.has(parsedUrl.toString())) {
+      continue;
+    }
+
+    seen.add(parsedUrl.toString());
+
+    result.push({
+      title: link.title,
+      url: parsedUrl.toString()
+    });
+  }
+
+  return result;
+}
+
+function looksLikeCircularArchive(url) {
+  if (url.pathname === "/circolare/" || url.pathname === "/circolare") {
+    return true;
+  }
+
+  if (/^\/circolare\/page\/\d+\/?$/.test(url.pathname)) {
+    return true;
+  }
+
+  return false;
 }
 
 function extractMainCircularText(text) {
