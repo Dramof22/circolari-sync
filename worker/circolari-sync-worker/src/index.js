@@ -2,7 +2,12 @@ const MAX_ARCHIVE_PAGES = 3;
 const MAX_CIRCULARS_TO_ANALYZE = 10;
 const SCAN_MARGIN_DAYS = 120;
 const MAX_PDFS_PER_CIRCULAR = 2;
-const MAX_PDF_READS_PER_ARCHIVE = 8;
+const MAX_PDF_READS_PER_ARCHIVE = 2;
+const MAX_PDF_BYTES = 1200 * 1024;
+const PDF_FETCH_TIMEOUT_MS = 3500;
+const MAX_PDF_SCAN_CHARS = 1200000;
+const MAX_PDF_STREAMS_TO_SCAN = 40;
+const MAX_PDF_STREAM_CHARS = 300000;
 
 export default {
   async fetch(request) {
@@ -30,6 +35,7 @@ async function handleAnalyze(url) {
   const schoolUrl = url.searchParams.get("url");
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const analysisMode = normalizeAnalysisMode(url.searchParams.get("mode"));
 
   const validation = validateRequestParams(schoolUrl, from, to);
 
@@ -38,7 +44,7 @@ async function handleAnalyze(url) {
   }
 
   try {
-    const data = await analyzeSchoolUrl(validation.schoolUrl, validation.from, validation.to);
+    const data = await analyzeSchoolUrl(validation.schoolUrl, validation.from, validation.to, analysisMode);
 
     return jsonResponse({
       ok: true,
@@ -63,6 +69,7 @@ async function handleCalendar(url) {
   const schoolUrl = url.searchParams.get("url");
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const analysisMode = normalizeAnalysisMode(url.searchParams.get("mode"));
 
   const validation = validateRequestParams(schoolUrl, from, to);
 
@@ -77,7 +84,7 @@ async function handleCalendar(url) {
   }
 
   try {
-    const data = await analyzeSchoolUrl(validation.schoolUrl, validation.from, validation.to);
+    const data = await analyzeSchoolUrl(validation.schoolUrl, validation.from, validation.to, analysisMode);
     const calendarItems = [
       ...data.events,
       ...data.dubbi.filter((item) => item.date)
@@ -101,6 +108,10 @@ async function handleCalendar(url) {
       }
     });
   }
+}
+
+function normalizeAnalysisMode(value) {
+  return value === "deep" ? "deep" : "fast";
 }
 
 function validateRequestParams(schoolUrl, from, to) {
@@ -197,7 +208,7 @@ function validateRequestParams(schoolUrl, from, to) {
   };
 }
 
-async function analyzeSchoolUrl(schoolUrl, from, to) {
+async function analyzeSchoolUrl(schoolUrl, from, to, analysisMode = "fast") {
   const parsedSchoolUrl = new URL(schoolUrl);
   const firstPage = await readPage(schoolUrl);
 
@@ -209,20 +220,29 @@ async function analyzeSchoolUrl(schoolUrl, from, to) {
 
   if (isArchive) {
     const archiveLinks = await collectCircularLinksFromArchive(parsedSchoolUrl, from, to);
-    const analysis = await analyzeCircularLinks(archiveLinks, from, to);
+    const analysis = await analyzeCircularLinks(archiveLinks, from, to, {
+      readPdfAttachments: analysisMode === "deep",
+      maxPdfReads: MAX_PDF_READS_PER_ARCHIVE
+    });
 
     return {
       mode: "archive",
+      analysisMode,
       url: schoolUrl,
       from: from || null,
       to: to || null,
       maxArchivePages: MAX_ARCHIVE_PAGES,
       maxCircolari: MAX_CIRCULARS_TO_ANALYZE,
+      maxPdfReadsPerArchive: analysisMode === "deep" ? MAX_PDF_READS_PER_ARCHIVE : 0,
       archivePagesRead: archiveLinks.archivePagesRead,
       linksFound: allLinks.length,
       circularLinksFound: circularLinks.length,
       realCircularLinksFound: archiveLinks.totalLinksFound,
       analyzedCount: analysis.analyzedPages.length,
+      pdfLinksFound: analysis.pdfLinksFound,
+      pdfReadsAttempted: analysis.pdfReadsAttempted,
+      pdfReadsSucceeded: analysis.pdfReadsSucceeded,
+      pdfReadsFailed: analysis.pdfReadsFailed,
       circularLinks: archiveLinks.links.slice(0, 30),
       analyzedPages: analysis.analyzedPages,
       events: analysis.events,
@@ -239,6 +259,7 @@ async function analyzeSchoolUrl(schoolUrl, from, to) {
 
   return {
     mode: "single",
+    analysisMode: "deep",
     url: schoolUrl,
     from: from || null,
     to: to || null,
@@ -348,28 +369,75 @@ function shouldKeepArchiveLink(archiveDate, scanFrom, to) {
   return true;
 }
 
-async function analyzeCircularLinks(linksData, from, to) {
+async function analyzeCircularLinks(linksData, from, to, options = {}) {
   const events = [];
   const dubbi = [];
   const analyzedPages = [];
+  const readPdfAttachments = options.readPdfAttachments === true;
+  const maxPdfReads = Number.isFinite(options.maxPdfReads) ? options.maxPdfReads : 0;
+
+  let pdfLinksFound = 0;
+  let pdfReadsAttempted = 0;
+  let pdfReadsSucceeded = 0;
+  let pdfReadsFailed = 0;
 
   for (const link of linksData.links) {
     try {
       const circularPage = await readPage(link.url);
       const pageText = extractCleanText(circularPage.html);
-      const mainText = normalizeExtractedPdfSpacing(extractMainCircularText(pageText));
-      const analysis = analyzeText(mainText, link.url);
-      const filtered = filterAnalysisByRange(analysis, from, to);
+      const htmlMainText = extractMainCircularText(pageText);
+      const circularPdfLinksFound = extractPdfLinks(circularPage.html, link.url).length;
+      let pdfText = "";
+      let pdfStats = {
+        pdfLinksFound: circularPdfLinksFound,
+        pdfReadsAttempted: 0,
+        pdfReadsSucceeded: 0,
+        pdfReadsFailed: 0
+      };
+
+      pdfLinksFound += circularPdfLinksFound;
+
+      const htmlOnlyText = normalizeExtractedPdfSpacing(htmlMainText);
+      const htmlOnlyAnalysis = analyzeText(htmlOnlyText, link.url);
+      const htmlOnlyFiltered = filterAnalysisByRange(htmlOnlyAnalysis, from, to);
+      const shouldTryPdf = shouldReadPdfForArchiveItem(htmlOnlyFiltered, circularPdfLinksFound);
+
+      if (readPdfAttachments && shouldTryPdf && pdfReadsAttempted < maxPdfReads) {
+        const remainingPdfReads = maxPdfReads - pdfReadsAttempted;
+        pdfStats = await readPdfTextFromCircularPage(circularPage.html, link.url, remainingPdfReads);
+        pdfText = pdfStats.text;
+
+        pdfReadsAttempted += pdfStats.pdfReadsAttempted;
+        pdfReadsSucceeded += pdfStats.pdfReadsSucceeded;
+        pdfReadsFailed += pdfStats.pdfReadsFailed;
+      }
+
+      const mainText = pdfText
+        ? normalizeExtractedPdfSpacing(`${htmlMainText}\n\n${pdfText}`)
+        : htmlOnlyText;
+
+      const analysis = pdfText ? analyzeText(mainText, link.url) : htmlOnlyAnalysis;
+      const filtered = pdfText ? filterAnalysisByRange(analysis, from, to) : htmlOnlyFiltered;
+      const enrichedDubbi = enrichDubbiWithPdfNotes(filtered.dubbi, {
+        pdfLinksFound: circularPdfLinksFound,
+        readPdfAttachments,
+        pdfText,
+        pdfReadsFailed: pdfStats.pdfReadsFailed
+      });
 
       events.push(...filtered.events);
-      dubbi.push(...filtered.dubbi);
+      dubbi.push(...enrichedDubbi);
 
       analyzedPages.push({
         title: link.title,
         url: link.url,
         archiveDate: link.archiveDate,
         ok: true,
-        mainTextLength: mainText.length
+        mainTextLength: mainText.length,
+        pdfLinksFound: circularPdfLinksFound,
+        pdfReadsAttempted: pdfStats.pdfReadsAttempted,
+        pdfReadsSucceeded: pdfStats.pdfReadsSucceeded,
+        pdfReadsFailed: pdfStats.pdfReadsFailed
       });
     } catch (error) {
       dubbi.push({
@@ -394,7 +462,11 @@ async function analyzeCircularLinks(linksData, from, to) {
   return {
     events: deduplicateItems(events),
     dubbi: deduplicateItems(dubbi),
-    analyzedPages
+    analyzedPages,
+    pdfLinksFound,
+    pdfReadsAttempted,
+    pdfReadsSucceeded,
+    pdfReadsFailed
   };
 }
 
@@ -421,21 +493,39 @@ async function readPage(pageUrl) {
 }
 
 async function extractPdfTextFromCircularPage(html, pageUrl) {
-  const pdfLinks = extractPdfLinks(html, pageUrl).slice(0, MAX_PDFS_PER_CIRCULAR);
+  const result = await readPdfTextFromCircularPage(html, pageUrl, MAX_PDFS_PER_CIRCULAR);
+  return result.text;
+}
+
+async function readPdfTextFromCircularPage(html, pageUrl, maxPdfs = MAX_PDFS_PER_CIRCULAR) {
+  const allPdfLinks = extractPdfLinks(html, pageUrl);
+  const pdfLinks = allPdfLinks.slice(0, Math.max(0, maxPdfs));
   const texts = [];
+  let pdfReadsSucceeded = 0;
+  let pdfReadsFailed = 0;
 
   for (const pdfUrl of pdfLinks) {
     try {
       const text = await readPdfText(pdfUrl);
       if (text) {
         texts.push(text);
+        pdfReadsSucceeded++;
+      } else {
+        pdfReadsFailed++;
       }
     } catch (error) {
+      pdfReadsFailed++;
       // Se un PDF non è leggibile, continuiamo con gli altri dati della circolare.
     }
   }
 
-  return texts.join("\n\n");
+  return {
+    text: texts.join("\n\n"),
+    pdfLinksFound: allPdfLinks.length,
+    pdfReadsAttempted: pdfLinks.length,
+    pdfReadsSucceeded,
+    pdfReadsFailed
+  };
 }
 
 function extractPdfLinks(html, baseUrl) {
@@ -452,22 +542,41 @@ function extractPdfLinks(html, baseUrl) {
 }
 
 async function readPdfText(pdfUrl) {
-  const response = await fetch(pdfUrl, {
-    headers: {
-      "User-Agent": "circolari-sync/0.3"
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(pdfUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "circolari-sync/0.3"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`PDF non leggibile, status ${response.status}`);
     }
-  });
 
-  if (!response.ok) {
-    throw new Error(`PDF non leggibile, status ${response.status}`);
+    const contentLength = Number.parseInt(response.headers.get("content-length") || "0", 10);
+
+    if (contentLength > MAX_PDF_BYTES) {
+      throw new Error("PDF troppo grande per l’analisi gratuita");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    if (arrayBuffer.byteLength > MAX_PDF_BYTES) {
+      throw new Error("PDF troppo grande per l’analisi gratuita");
+    }
+
+    return await extractTextFromPdfBytes(new Uint8Array(arrayBuffer));
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return await extractTextFromPdfBytes(new Uint8Array(arrayBuffer));
 }
 
 async function extractTextFromPdfBytes(bytes) {
-  const binary = bytesToBinaryString(bytes);
+  const binary = bytesToBinaryString(bytes).slice(0, MAX_PDF_SCAN_CHARS);
   const streamTexts = await extractPdfStreams(binary);
   const rawText = streamTexts.join("\n");
 
@@ -494,22 +603,33 @@ async function extractPdfStreams(binary) {
   const texts = [];
   const streamRegex = /<<(.*?)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
   let match;
+  let streamsScanned = 0;
 
   while ((match = streamRegex.exec(binary)) !== null) {
+    if (streamsScanned >= MAX_PDF_STREAMS_TO_SCAN) {
+      break;
+    }
+
+    streamsScanned++;
+
     const dictionary = match[1] || "";
     const stream = match[2] || "";
+
+    if (stream.length > MAX_PDF_STREAM_CHARS) {
+      continue;
+    }
 
     texts.push(extractPdfTextOperators(stream));
 
     if (dictionary.includes("/FlateDecode")) {
       const decompressed = await tryDecompressPdfStream(stream);
-      if (decompressed) {
+      if (decompressed && decompressed.length <= MAX_PDF_STREAM_CHARS) {
         texts.push(extractPdfTextOperators(decompressed));
       }
     }
   }
 
-  texts.push(extractPdfTextOperators(binary));
+  texts.push(extractPdfTextOperators(binary.slice(0, MAX_PDF_SCAN_CHARS)));
 
   return texts.filter(Boolean);
 }
@@ -820,6 +940,44 @@ function analyzeText(text, sourceUrl) {
       }
     ]
   };
+}
+
+function shouldReadPdfForArchiveItem(filteredAnalysis, pdfLinksFound) {
+  if (pdfLinksFound <= 0) {
+    return false;
+  }
+
+  return filteredAnalysis.dubbi.some((item) => {
+    const reason = String(item.reason || "").toLowerCase();
+    return item.date && !item.startTime && reason.includes("orario non trovato");
+  });
+}
+
+function enrichDubbiWithPdfNotes(items, pdfInfo) {
+  return items.map((item) => {
+    if (item.startTime || pdfInfo.pdfLinksFound <= 0) {
+      return item;
+    }
+
+    let note = "";
+
+    if (!pdfInfo.readPdfAttachments) {
+      note = "Alcuni orari potrebbero essere negli allegati PDF. Prova l’analisi approfondita.";
+    } else if (!pdfInfo.pdfText) {
+      note = "PDF allegato non leggibile automaticamente: potrebbe essere scannerizzato o composto da immagini.";
+    } else if (pdfInfo.pdfReadsFailed > 0) {
+      note = "Almeno un PDF allegato non è stato leggibile automaticamente.";
+    }
+
+    if (!note) {
+      return item;
+    }
+
+    return {
+      ...item,
+      reason: item.reason ? `${item.reason}. ${note}` : note
+    };
+  });
 }
 
 function filterAnalysisByRange(analysis, from, to) {

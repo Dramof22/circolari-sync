@@ -184,6 +184,26 @@
       pointer-events: none;
     }
 
+    .mode-box {
+      display: grid;
+      gap: 0.6rem;
+      margin: 1rem 0;
+      padding: 1rem;
+      border: 1px solid #dde3ee;
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+
+    .mode-box label {
+      display: grid;
+      gap: 0.2rem;
+      cursor: pointer;
+    }
+
+    .mode-box input {
+      margin-right: 0.4rem;
+    }
+
     .main-action {
       margin-top: 16px;
     }
@@ -397,6 +417,26 @@
         </div>
       </div>
 
+      <div class="mode-box">
+        <strong>Modalità di analisi</strong>
+
+        <label>
+          <input type="radio" name="analysisMode" value="fast" checked>
+          Analisi rapida
+          <span class="small">Legge archivio e pagine HTML. È più veloce.</span>
+        </label>
+
+        <label>
+          <input type="radio" name="analysisMode" value="deep">
+          Analisi approfondita con PDF
+          <span class="small">Legge anche alcuni allegati PDF testuali, con limiti controllati.</span>
+        </label>
+
+        <p class="small">
+          I PDF scannerizzati o composti da immagini non sono leggibili automaticamente senza OCR.
+        </p>
+      </div>
+
       <div class="main-action">
         <button id="analyzeButton" onclick="analyzeSchool()">Analizza circolari</button>
       </div>
@@ -505,6 +545,8 @@
       const schoolUrl = input.value.trim();
       const from = fromInput.value;
       const to = toInput.value;
+      const selectedMode = document.querySelector('input[name="analysisMode"]:checked');
+      const analysisMode = selectedMode ? selectedMode.value : "fast";
 
       if (!schoolUrl.startsWith("http://") && !schoolUrl.startsWith("https://")) {
         result.textContent = "Inserisci un URL valido che inizi con http:// o https://";
@@ -521,7 +563,9 @@
         return;
       }
 
-      result.textContent = "Analisi in corso...";
+      result.textContent = analysisMode === "deep"
+        ? "Analisi approfondita in corso: leggo anche alcuni PDF testuali..."
+        : "Analisi rapida in corso...";
       button.disabled = true;
       liveResults.style.display = "none";
       analysisStats.style.display = "none";
@@ -531,7 +575,7 @@
       liveDubbi.innerHTML = "";
 
       try {
-        const analyzeUrl = buildAnalyzeUrl(schoolUrl, from, to);
+        const analyzeUrl = buildAnalyzeUrl(schoolUrl, from, to, analysisMode);
         const response = await fetch(analyzeUrl);
         const data = await response.json();
 
@@ -544,9 +588,17 @@
         const dubbi = data.dubbi || [];
         const analyzedCount = data.analyzedCount || 1;
 
-        currentCalendarUrl = buildCalendarUrl(schoolUrl, from, to);
+        currentCalendarUrl = buildCalendarUrl(schoolUrl, from, to, analysisMode);
 
-        result.textContent = data.message;
+        const modeLabel = analysisMode === "deep" ? "analisi approfondita" : "analisi rapida";
+        result.textContent = `${data.message} (${modeLabel}).`;
+
+        if (
+          analysisMode === "fast" &&
+          dubbi.some((item) => String(item.reason || "").includes("allegati PDF"))
+        ) {
+          result.textContent += " Alcuni orari potrebbero essere negli allegati PDF: puoi provare l’analisi approfondita.";
+        }
         liveResults.style.display = "block";
         analysisStats.style.display = "grid";
         calendarActions.style.display = "flex";
@@ -570,21 +622,23 @@
       }
     }
 
-    function buildAnalyzeUrl(schoolUrl, from, to) {
+    function buildAnalyzeUrl(schoolUrl, from, to, mode) {
       const params = new URLSearchParams({
         url: schoolUrl,
         from,
-        to
+        to,
+        mode
       });
 
       return ANALYZE_URL + "?" + params.toString();
     }
 
-    function buildCalendarUrl(schoolUrl, from, to) {
+    function buildCalendarUrl(schoolUrl, from, to, mode) {
       const params = new URLSearchParams({
         url: schoolUrl,
         from,
-        to
+        to,
+        mode
       });
 
       return CALENDAR_URL + "?" + params.toString();
