@@ -636,9 +636,84 @@ function analyzeText(text, sourceUrl) {
 
 function filterAnalysisByRange(analysis, from, to) {
   return {
-    events: analysis.events.filter((item) => isItemInRange(item, from, to)),
-    dubbi: analysis.dubbi.filter((item) => isItemInRange(item, from, to, true))
+    events: analysis.events
+      .filter((item) => isItemInRange(item, from, to))
+      .filter((item) => looksLikeUsefulCalendarItem(item)),
+    dubbi: analysis.dubbi
+      .filter((item) => isItemInRange(item, from, to, true))
+      .filter((item) => looksLikeUsefulCalendarItem(item))
   };
+}
+
+function looksLikeUsefulCalendarItem(item) {
+  if (!item.date) {
+    return false;
+  }
+
+  if (item.startTime && item.endTime) {
+    return true;
+  }
+
+  const text = `${item.title || ""} ${item.reason || ""}`.toLowerCase();
+
+  const eventWords = [
+    "assemblea",
+    "collegio",
+    "consiglio",
+    "consigli",
+    "riunione",
+    "incontro",
+    "convocazione",
+    "scrutinio",
+    "scrutini",
+    "esame",
+    "esami",
+    "sciopero",
+    "uscita",
+    "chiusura",
+    "sospensione",
+    "festa",
+    "festività",
+    "prova",
+    "prove",
+    "invalsi",
+    "manifestazione",
+    "evento",
+    "webinar",
+    "corso",
+    "dipartimenti",
+    "glh",
+    "gli",
+    "glo"
+  ];
+
+  const genericWords = [
+    "pubblicazione",
+    "trasmissione",
+    "comunicazione salvataggio",
+    "monitoraggio",
+    "rendicontazione",
+    "ricognizione",
+    "graduatorie",
+    "informativa",
+    "privacy",
+    "trattamento dei dati",
+    "materiali digitali",
+    "decreti di liquidazione"
+  ];
+
+  const hasEventWord = eventWords.some((word) => text.includes(word));
+  const hasGenericWord = genericWords.some((word) => text.includes(word));
+
+  if (hasEventWord) {
+    return true;
+  }
+
+  if (hasGenericWord) {
+    return false;
+  }
+
+  return false;
 }
 
 function isItemInRange(item, from, to, keepWithoutDate = false) {
