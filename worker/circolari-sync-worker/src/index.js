@@ -1,6 +1,8 @@
-const MAX_ARCHIVE_PAGES = 20;
-const MAX_CIRCULARS_TO_ANALYZE = 120;
+const MAX_ARCHIVE_PAGES = 3;
+const MAX_CIRCULARS_TO_ANALYZE = 10;
 const SCAN_MARGIN_DAYS = 120;
+const MAX_PDFS_PER_CIRCULAR = 2;
+const MAX_PDF_READS_PER_ARCHIVE = 8;
 
 export default {
   async fetch(request) {
@@ -229,7 +231,9 @@ async function analyzeSchoolUrl(schoolUrl, from, to) {
   }
 
   const pageText = extractCleanText(firstPage.html);
-  const mainText = extractMainCircularText(pageText);
+  const htmlMainText = extractMainCircularText(pageText);
+  const pdfText = await extractPdfTextFromCircularPage(firstPage.html, schoolUrl);
+  const mainText = normalizeExtractedPdfSpacing(`${htmlMainText}\n\n${pdfText}`);
   const analysis = analyzeText(mainText, schoolUrl);
   const filtered = filterAnalysisByRange(analysis, from, to);
 
@@ -353,7 +357,7 @@ async function analyzeCircularLinks(linksData, from, to) {
     try {
       const circularPage = await readPage(link.url);
       const pageText = extractCleanText(circularPage.html);
-      const mainText = extractMainCircularText(pageText);
+      const mainText = normalizeExtractedPdfSpacing(extractMainCircularText(pageText));
       const analysis = analyzeText(mainText, link.url);
       const filtered = filterAnalysisByRange(analysis, from, to);
 
@@ -394,6 +398,7 @@ async function analyzeCircularLinks(linksData, from, to) {
   };
 }
 
+
 async function readPage(pageUrl) {
   const pageResponse = await fetch(pageUrl, {
     headers: {
@@ -414,6 +419,180 @@ async function readPage(pageUrl) {
     html
   };
 }
+
+async function extractPdfTextFromCircularPage(html, pageUrl) {
+  const pdfLinks = extractPdfLinks(html, pageUrl).slice(0, MAX_PDFS_PER_CIRCULAR);
+  const texts = [];
+
+  for (const pdfUrl of pdfLinks) {
+    try {
+      const text = await readPdfText(pdfUrl);
+      if (text) {
+        texts.push(text);
+      }
+    } catch (error) {
+      // Se un PDF non è leggibile, continuiamo con gli altri dati della circolare.
+    }
+  }
+
+  return texts.join("\n\n");
+}
+
+function extractPdfLinks(html, baseUrl) {
+  return extractLinks(html, baseUrl)
+    .map((link) => link.url)
+    .filter((url) => {
+      try {
+        const parsed = new URL(url);
+        return parsed.pathname.toLowerCase().endsWith(".pdf");
+      } catch (error) {
+        return false;
+      }
+    });
+}
+
+async function readPdfText(pdfUrl) {
+  const response = await fetch(pdfUrl, {
+    headers: {
+      "User-Agent": "circolari-sync/0.3"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`PDF non leggibile, status ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return await extractTextFromPdfBytes(new Uint8Array(arrayBuffer));
+}
+
+async function extractTextFromPdfBytes(bytes) {
+  const binary = bytesToBinaryString(bytes);
+  const streamTexts = await extractPdfStreams(binary);
+  const rawText = streamTexts.join("\n");
+
+  return cleanText(
+    decodePdfText(rawText)
+      .replace(/\\n/g, " ")
+      .replace(/\\r/g, " ")
+  );
+}
+
+function bytesToBinaryString(bytes) {
+  let result = "";
+  const chunkSize = 8192;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.slice(index, index + chunkSize);
+    result += String.fromCharCode(...chunk);
+  }
+
+  return result;
+}
+
+async function extractPdfStreams(binary) {
+  const texts = [];
+  const streamRegex = /<<(.*?)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let match;
+
+  while ((match = streamRegex.exec(binary)) !== null) {
+    const dictionary = match[1] || "";
+    const stream = match[2] || "";
+
+    texts.push(extractPdfTextOperators(stream));
+
+    if (dictionary.includes("/FlateDecode")) {
+      const decompressed = await tryDecompressPdfStream(stream);
+      if (decompressed) {
+        texts.push(extractPdfTextOperators(decompressed));
+      }
+    }
+  }
+
+  texts.push(extractPdfTextOperators(binary));
+
+  return texts.filter(Boolean);
+}
+
+async function tryDecompressPdfStream(stream) {
+  if (typeof DecompressionStream === "undefined") {
+    return "";
+  }
+
+  const bytes = binaryStringToBytes(stream.replace(/^\r?\n/, "").replace(/\r?\n$/, ""));
+
+  for (const format of ["deflate", "deflate-raw"]) {
+    try {
+      const decompressionStream = new DecompressionStream(format);
+      const writer = decompressionStream.writable.getWriter();
+
+      await writer.write(bytes);
+      await writer.close();
+
+      const response = new Response(decompressionStream.readable);
+      const buffer = await response.arrayBuffer();
+
+      return bytesToBinaryString(new Uint8Array(buffer));
+    } catch (error) {
+      // Proviamo il formato successivo.
+    }
+  }
+
+  return "";
+}
+
+function binaryStringToBytes(value) {
+  const bytes = new Uint8Array(value.length);
+
+  for (let index = 0; index < value.length; index += 1) {
+    bytes[index] = value.charCodeAt(index) & 255;
+  }
+
+  return bytes;
+}
+
+function extractPdfTextOperators(content) {
+  const pieces = [];
+
+  const tjRegex = /\(([^()]*(?:\\.[^()]*)*)\)\s*Tj/g;
+  let tjMatch;
+
+  while ((tjMatch = tjRegex.exec(content)) !== null) {
+    pieces.push(tjMatch[1]);
+  }
+
+  const arrayRegex = /\[((?:\s*\([^()]*(?:\\.[^()]*)*\)\s*-?\d*)+)\]\s*TJ/g;
+  let arrayMatch;
+
+  while ((arrayMatch = arrayRegex.exec(content)) !== null) {
+    const arrayContent = arrayMatch[1];
+    const stringRegex = /\(([^()]*(?:\\.[^()]*)*)\)/g;
+    let stringMatch;
+    const row = [];
+
+    while ((stringMatch = stringRegex.exec(arrayContent)) !== null) {
+      row.push(stringMatch[1]);
+    }
+
+    pieces.push(row.join(""));
+  }
+
+  return pieces.join(" ");
+}
+
+function decodePdfText(text) {
+  return text
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\\/g, "\\")
+    .replace(/\\r/g, " ")
+    .replace(/\\n/g, " ")
+    .replace(/\\t/g, " ")
+    .replace(/\\([0-7]{3})/g, (_, octal) => {
+      return String.fromCharCode(parseInt(octal, 8));
+    });
+}
+
 
 function buildArchivePageUrl(archiveUrl, pageNumber) {
   const url = new URL(archiveUrl.toString());
@@ -556,6 +735,15 @@ function looksLikeCircularArchive(url) {
   return false;
 }
 
+function normalizeExtractedPdfSpacing(text) {
+  return cleanText(text)
+    .replace(/(\d)\s+(\d)(?=\s*[:./-])/g, "$1$2")
+    .replace(/([:./-])\s+(\d)/g, "$1$2")
+    .replace(/(\d)\s+(\d)(?=\D)/g, "$1$2")
+    .replace(/ore\s+(\d{1,2})\s*[:.,]\s*(\d)\s+(\d)/gi, "ore $1:$2$3")
+    .replace(/ore\s+(\d{1,2})\s*[:.,]\s*(\d{2})/gi, "ore $1:$2");
+}
+
 function extractMainCircularText(text) {
   let mainText = text;
 
@@ -643,6 +831,29 @@ function filterAnalysisByRange(analysis, from, to) {
       .filter((item) => isItemInRange(item, from, to, true))
       .filter((item) => looksLikeUsefulCalendarItem(item))
   };
+}
+
+function looksLikePotentialEventText(text) {
+  const normalized = text.toLowerCase();
+
+  return [
+    "assemblea",
+    "collegio",
+    "convocazione",
+    "consiglio",
+    "scrutinio",
+    "scrutini",
+    "riunione",
+    "incontro",
+    "open day",
+    "uscita",
+    "viaggio",
+    "esame",
+    "prove",
+    "formazione",
+    "sindacale",
+    "sciopero"
+  ].some((word) => normalized.includes(word));
 }
 
 function looksLikeUsefulCalendarItem(item) {
@@ -879,24 +1090,59 @@ function findArchiveDateInTitle(title) {
   return `${year}-${month}-${day}`;
 }
 
-function findTimeRange(text) {
-  const timeRangeRegex = /\b(?:ore\s*)?(\d{1,2})[:.](\d{2})\s*[-–]\s*(?:ore\s*)?(\d{1,2})[:.](\d{2})\b/i;
-  const match = text.match(timeRangeRegex);
+function normalizeTime(hour, minute) {
+  const parsedHour = Number.parseInt(hour, 10);
+  const parsedMinute = Number.parseInt(minute || "00", 10);
 
-  if (!match) {
+  if (
+    Number.isNaN(parsedHour) ||
+    Number.isNaN(parsedMinute) ||
+    parsedHour < 0 ||
+    parsedHour > 23 ||
+    parsedMinute < 0 ||
+    parsedMinute > 59
+  ) {
     return null;
   }
 
-  const startHour = match[1].padStart(2, "0");
-  const startMinute = match[2];
-  const endHour = match[3].padStart(2, "0");
-  const endMinute = match[4];
-
-  return {
-    startTime: `${startHour}:${startMinute}`,
-    endTime: `${endHour}:${endMinute}`
-  };
+  return `${String(parsedHour).padStart(2, "0")}:${String(parsedMinute).padStart(2, "0")}`;
 }
+
+function findTimeRange(text) {
+  const normalized = cleanText(text).replace(/\s+/g, " ");
+
+  const rangePatterns = [
+    /(?:dalle|dalle ore|ore)\s*(\d{1,2})(?:[:.,](\d{2}))?\s*(?:alle|[-–—])\s*(?:ore\s*)?(\d{1,2})(?:[:.,](\d{2}))?/i,
+    /(\d{1,2})(?:[:.,](\d{2}))?\s*[-–—]\s*(\d{1,2})(?:[:.,](\d{2}))?/i
+  ];
+
+  for (const pattern of rangePatterns) {
+    const match = normalized.match(pattern);
+
+    if (match) {
+      const startTime = normalizeTime(match[1], match[2] || "00");
+      const endTime = normalizeTime(match[3], match[4] || "00");
+
+      if (startTime && endTime && startTime < endTime) {
+        return { startTime, endTime };
+      }
+    }
+  }
+
+  const oreMatches = [...normalized.matchAll(/(?:alle\s+)?ore\s*(\d{1,2})(?:[:.,](\d{2}))?/gi)]
+    .map((match) => normalizeTime(match[1], match[2] || "00"))
+    .filter(Boolean);
+
+  if (oreMatches.length >= 2) {
+    return {
+      startTime: oreMatches[0],
+      endTime: oreMatches[oreMatches.length - 1]
+    };
+  }
+
+  return null;
+}
+
 
 function buildIcsCalendar(events, sourceUrl, from, to) {
   const now = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
