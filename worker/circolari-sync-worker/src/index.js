@@ -219,43 +219,125 @@ async function analyzeSchoolUrl(schoolUrl, from, to, analysisMode = "fast") {
 
   let allLinks = extractLinks(firstPage.html, parsedSchoolUrl);
   let circularLinks = filterCircularLinks(allLinks);
-  let realCircularLinks = filterRealCircularPages(circularLinks, parsedSchoolUrl);
+  let realCircularLinks = mergeDirectCircularPdfLinks(filterRealCircularPages(circularLinks, parsedSchoolUrl), circularLinks);
 
   let isArchive = looksLikeCircularArchive(parsedSchoolUrl);
 
   if (!isArchive && shouldTryDefaultCircularArchive(parsedSchoolUrl, realCircularLinks)) {
-    const candidateArchiveUrl = new URL("/circolare/", parsedSchoolUrl.origin);
+    const archiveCandidates = [
+      "/circolare/",
+      "/circolari/",
+      "/categoria/circolari/",
+      "/documento/circolari/"
+    ];
 
-    try {
-      const candidatePage = await readPage(candidateArchiveUrl.toString());
-      const candidateLinks = extractLinks(candidatePage.html, candidateArchiveUrl);
-      const candidateCircularLinks = filterCircularLinks(candidateLinks);
-      const candidateRealCircularLinks = filterRealCircularPages(candidateCircularLinks, candidateArchiveUrl);
+    let bestArchive = null;
+
+    for (const archivePath of archiveCandidates) {
+      const candidateArchiveUrl = new URL(archivePath, parsedSchoolUrl.origin);
+
+      try {
+        const candidatePage = await readPage(candidateArchiveUrl.toString());
+        const candidateLinks = extractLinks(candidatePage.html, candidateArchiveUrl);
+        const candidateCircularLinks = filterCircularLinks(candidateLinks);
+        const candidateRealCircularLinks = mergeDirectCircularPdfLinks(filterRealCircularPages(candidateCircularLinks, candidateArchiveUrl), candidateCircularLinks);
+
+        const archivePathBonus =
+          archivePath === "/circolari/" ? 100 :
+          archivePath === "/categoria/circolari/" ? 40 :
+          archivePath === "/documento/circolari/" ? 30 :
+          archivePath === "/circolare/" ? 0 :
+          0;
+
+        const archiveScore =
+          archivePathBonus +
+          candidateRealCircularLinks.length * 10 +
+          candidateCircularLinks.length;
+
+        const isKnownArchiveCandidate = archiveCandidates.includes(archivePath);
+
+        if (
+          (looksLikeCircularArchive(candidateArchiveUrl) || isKnownArchiveCandidate) &&
+          archiveScore > 0 &&
+          (!bestArchive || archiveScore > bestArchive.score)
+        ) {
+          bestArchive = {
+            score: archiveScore,
+            parsedUrl: candidateArchiveUrl,
+            page: candidatePage,
+            links: candidateLinks,
+            circularLinks: candidateCircularLinks,
+            realCircularLinks: candidateRealCircularLinks
+          };
+        }
+      } catch (error) {
+        // Se un candidato archivio non è leggibile, proviamo il successivo.
+      }
+    }
+
+    if (bestArchive) {
+      parsedSchoolUrl = bestArchive.parsedUrl;
+      analyzedUrl = bestArchive.parsedUrl.toString();
+      archiveAutoDetected = true;
+      firstPage = bestArchive.page;
+      allLinks = bestArchive.links;
+      circularLinks = bestArchive.circularLinks;
+      realCircularLinks = bestArchive.realCircularLinks;
 
       if (
-        looksLikeCircularArchive(candidateArchiveUrl) &&
-        candidateRealCircularLinks.length > 0
+        realCircularLinks.length === 0 &&
+        parsedSchoolUrl.pathname.toLowerCase().includes("/circolari/")
       ) {
-        parsedSchoolUrl = candidateArchiveUrl;
-        analyzedUrl = candidateArchiveUrl.toString();
-        archiveAutoDetected = true;
-        firstPage = candidatePage;
-        allLinks = candidateLinks;
-        circularLinks = candidateCircularLinks;
-        realCircularLinks = candidateRealCircularLinks;
-        isArchive = true;
+        realCircularLinks = getDirectPdfArchiveLinks(allLinks, parsedSchoolUrl.toString());
+        circularLinks = realCircularLinks;
       }
-    } catch (error) {
-      // Se /circolare/ non esiste o non è leggibile, continuiamo con la pagina originale.
+
+      isArchive = true;
     }
   }
 
   if (isArchive) {
     const archiveLimits = getArchiveLimits(analysisMode);
     const archiveLinks = await collectCircularLinksFromArchive(parsedSchoolUrl, from, to, archiveLimits);
+
+    const rawArchiveLinksBeforeDateFilter = Array.isArray(archiveLinks.links)
+      ? [...archiveLinks.links]
+      : [];
+
     archiveLinks.links = archiveLinks.links
       .filter((link) => shouldKeepArchiveLink(link, from, to))
       .slice(0, archiveLimits.maxCircolari);
+
+    if (
+      archiveLinks.links.length === 0 &&
+      parsedSchoolUrl.pathname.toLowerCase().includes("/circolari/")
+    ) {
+      const fallbackArchiveLinks = [
+        ...rawArchiveLinksBeforeDateFilter,
+        ...(Array.isArray(realCircularLinks) ? realCircularLinks : []),
+        ...(Array.isArray(circularLinks) ? circularLinks : []),
+        ...(Array.isArray(allLinks) ? getDirectPdfArchiveLinks(allLinks, parsedSchoolUrl.toString()) : []),
+        ...(firstPage && firstPage.html ? getDirectPdfArchiveLinksFromHtml(firstPage.html, parsedSchoolUrl.toString()) : [])
+      ];
+
+      const uniqueFallbackArchiveLinks = [];
+      const seenFallbackArchiveLinks = new Set();
+
+      for (const link of fallbackArchiveLinks) {
+        if (!link || !link.url || seenFallbackArchiveLinks.has(link.url)) {
+          continue;
+        }
+
+        seenFallbackArchiveLinks.add(link.url);
+        uniqueFallbackArchiveLinks.push(link);
+      }
+
+      if (uniqueFallbackArchiveLinks.length > 0) {
+        archiveLinks.links = uniqueFallbackArchiveLinks.slice(0, archiveLimits.maxCircolari);
+        circularLinks = archiveLinks.links;
+        realCircularLinks = archiveLinks.links;
+      }
+    }
 
     archiveLinks.totalLinksFound = archiveLinks.links.length;
 
@@ -347,7 +429,7 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to, limits = {}
 
     const pageLinks = extractLinks(page.html, new URL(pageUrl));
     const circularLinks = filterCircularLinks(pageLinks);
-    const realCircularLinks = filterRealCircularPages(circularLinks, archiveUrl);
+    const realCircularLinks = mergeDirectCircularPdfLinks(filterRealCircularPages(circularLinks, archiveUrl), circularLinks);
     const pageDates = [];
 
     totalLinksFound += realCircularLinks.length;
@@ -359,7 +441,9 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to, limits = {}
         pageDates.push(archiveDate);
       }
 
-      if (!shouldKeepArchiveLink({ ...link, archiveDate }, scanFrom, to)) {
+      const isNoDateOperationalPdf = !archiveDate && isOperationalDirectPdf(link);
+
+      if (!isNoDateOperationalPdf && !shouldKeepArchiveLink({ ...link, archiveDate }, scanFrom, to)) {
         continue;
       }
 
@@ -400,9 +484,200 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to, limits = {}
   };
 }
 
+
+function isOperationalDirectPdf(link) {
+  try {
+    const rawUrl = String(link?.url || "");
+    const rawText = String(`${link?.title || ""} ${link?.text || ""} ${link?.url || ""}`);
+    const parsedUrl = new URL(rawUrl, "https://example.com/");
+    const path = parsedUrl.pathname.toLowerCase();
+    const text = normalizeText(rawText);
+
+    if (!path.endsWith(".pdf")) {
+      return false;
+    }
+
+    const directPdfKeywords = [
+      "circolare",
+      "circolari",
+      "convocazione",
+      "collegio",
+      "consiglio",
+      "consigli",
+      "scrutinio",
+      "scrutini",
+      "riunione",
+      "incontro",
+      "dipartimenti",
+      "dipartimento",
+      "glo",
+      "gli",
+      "glh"
+    ];
+
+    return directPdfKeywords.some((keyword) => text.includes(keyword));
+  } catch (error) {
+    return false;
+  }
+}
+
+
+
+
+function directPdfLooksUseful(url, text = "") {
+  const normalized = normalizeText(`${url || ""} ${text || ""}`);
+
+  return (
+    normalized.includes("circolare") ||
+    normalized.includes("circolari") ||
+    normalized.includes("convocazione") ||
+    normalized.includes("collegio") ||
+    normalized.includes("consiglio") ||
+    normalized.includes("consigli") ||
+    normalized.includes("scrutinio") ||
+    normalized.includes("scrutini") ||
+    normalized.includes("riunione") ||
+    normalized.includes("incontro") ||
+    normalized.includes("dipartimenti") ||
+    normalized.includes("dipartimento") ||
+    normalized.includes("glo") ||
+    normalized.includes("gli") ||
+    normalized.includes("glh")
+  );
+}
+
+function getDirectPdfArchiveLinksFromHtml(html, baseUrl) {
+  const out = [];
+  const seen = new Set();
+  const source = String(html || "");
+  const linkRegex = /<a\b[^>]*href=["']([^"']+\.pdf(?:\?[^"']*)?)["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+  let match;
+
+  while ((match = linkRegex.exec(source)) !== null) {
+    try {
+      const href = match[1];
+      const rawInner = match[2] || "";
+      const text = rawInner
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const parsedUrl = new URL(href, baseUrl);
+      const finalUrl = parsedUrl.toString();
+
+      if (!directPdfLooksUseful(finalUrl, text)) {
+        continue;
+      }
+
+      if (seen.has(finalUrl)) {
+        continue;
+      }
+
+      seen.add(finalUrl);
+      out.push({
+        url: finalUrl,
+        title: text || finalUrl,
+        text: text || finalUrl,
+        archiveDate: null
+      });
+    } catch (error) {
+      // Link non valido: ignorato.
+    }
+  }
+
+  return out;
+}
+
+
+function getDirectPdfArchiveLinks(links, baseUrl) {
+  const out = [];
+  const seen = new Set();
+
+  for (const link of Array.isArray(links) ? links : []) {
+    try {
+      const parsedUrl = new URL(link.url, baseUrl);
+      const path = parsedUrl.pathname.toLowerCase();
+      const text = normalizeText(`${link.title || ""} ${link.text || ""} ${link.url || ""} ${path}`);
+
+      if (!path.endsWith(".pdf")) {
+        continue;
+      }
+
+      const looksUseful =
+        text.includes("circolare") ||
+        text.includes("circolari") ||
+        text.includes("convocazione") ||
+        text.includes("collegio") ||
+        text.includes("consiglio") ||
+        text.includes("consigli") ||
+        text.includes("scrutinio") ||
+        text.includes("scrutini") ||
+        text.includes("riunione") ||
+        text.includes("incontro") ||
+        text.includes("dipartimenti") ||
+        text.includes("dipartimento") ||
+        text.includes("glo") ||
+        text.includes("gli") ||
+        text.includes("glh");
+
+      if (!looksUseful) {
+        continue;
+      }
+
+      const finalUrl = parsedUrl.toString();
+      if (seen.has(finalUrl)) {
+        continue;
+      }
+
+      seen.add(finalUrl);
+      out.push({
+        ...link,
+        url: finalUrl,
+        title: link.title || link.text || finalUrl,
+        archiveDate: link.archiveDate || null
+      });
+    } catch (error) {
+      // Link non valido: ignorato.
+    }
+  }
+
+  return out;
+}
+
+function mergeDirectCircularPdfLinks(realLinks, candidateLinks) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const link of Array.isArray(realLinks) ? realLinks : []) {
+    const key = String(link.url || "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(link);
+  }
+
+  for (const link of Array.isArray(candidateLinks) ? candidateLinks : []) {
+    if (!isOperationalDirectPdf(link)) {
+      continue;
+    }
+
+    const key = String(link.url || "");
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    merged.push(link);
+  }
+
+  return merged;
+}
+
 function shouldKeepArchiveLink(link, from, to) {
   if (!link) {
     return false;
+  }
+
+  if (isOperationalDirectPdf(link)) {
+    return true;
   }
 
   const title = link.title || link.text || link.url || "";
@@ -421,7 +696,7 @@ function shouldKeepArchiveLink(link, from, to) {
     }
 
     return true;
-  }
+  } 
 
   // Nella nuova versione il calendario usa una finestra breve.
   // Se dall'archivio non riusciamo a leggere la data del link, non apriamo
@@ -444,6 +719,59 @@ async function analyzeCircularLinks(linksData, from, to, options = {}) {
 
   for (const link of linksData.links) {
     try {
+      const linkUrl = new URL(link.url);
+      const isDirectPdfLink = linkUrl.pathname.toLowerCase().endsWith(".pdf");
+
+      if (isDirectPdfLink) {
+        let pdfText = "";
+        let pdfReadOk = false;
+
+        if (readPdfAttachments && pdfReadsAttempted < maxPdfReads) {
+          pdfReadsAttempted += 1;
+
+          try {
+            pdfText = await readPdfText(link.url);
+            pdfReadOk = Boolean(pdfText && pdfText.trim());
+            if (pdfReadOk) {
+              pdfReadsSucceeded += 1;
+            } else {
+              pdfReadsFailed += 1;
+            }
+          } catch (error) {
+            pdfReadsFailed += 1;
+          }
+        }
+
+        const mainText = normalizeExtractedPdfSpacing(pdfText || "");
+        const analysis = analyzeText(mainText, link.url);
+        const filtered = filterAnalysisByRange(analysis, from, to);
+        const enrichedDubbi = enrichDubbiWithPdfNotes(filtered.dubbi, {
+          pdfLinksFound: 1,
+          readPdfAttachments,
+          pdfText,
+          pdfReadsFailed: pdfReadOk ? 0 : 1
+        });
+
+        pdfLinksFound += 1;
+
+        events.push(...filtered.events);
+        dubbi.push(...enrichedDubbi);
+
+        analyzedPages.push({
+          title: link.title,
+          url: link.url,
+          archiveDate: link.archiveDate,
+          ok: true,
+          mainTextLength: mainText.length,
+          pdfLinksFound: 1,
+          pdfReadsAttempted: readPdfAttachments ? 1 : 0,
+          pdfReadsSucceeded: pdfReadOk ? 1 : 0,
+          pdfReadsFailed: pdfReadOk ? 0 : 1
+        });
+
+        continue;
+      }
+
       const circularPage = await readPage(link.url);
       const pageText = extractCleanText(circularPage.html);
       const htmlMainText = extractMainCircularText(pageText);
@@ -860,16 +1188,29 @@ function filterRealCircularPages(links, baseUrl) {
     let parsedUrl;
 
     try {
-      parsedUrl = new URL(link.url);
+      parsedUrl = new URL(link.url, baseUrl);
     } catch (error) {
       continue;
     }
 
-    if (parsedUrl.hostname !== baseHost) {
+    const normalizedHost = parsedUrl.hostname.replace(/^www\./, "");
+    const normalizedBaseHost = baseHost.replace(/^www\./, "");
+
+    if (normalizedHost !== normalizedBaseHost) {
       continue;
     }
 
-    if (!parsedUrl.pathname.startsWith("/circolare/")) {
+    const normalizedPath = parsedUrl.pathname.toLowerCase();
+    const normalizedText = `${link.title || ""} ${link.text || ""} ${link.url || ""}`.toLowerCase();
+    const isDirectCircularPdf =
+      normalizedPath.endsWith(".pdf") &&
+      (
+        normalizedText.includes("circolare") ||
+        normalizedText.includes("circolari") ||
+        normalizedPath.includes("/wp-content/uploads/")
+      );
+
+    if (!parsedUrl.pathname.startsWith("/circolare/") && !isDirectCircularPdf) {
       continue;
     }
 
@@ -881,7 +1222,7 @@ function filterRealCircularPages(links, baseUrl) {
       continue;
     }
 
-    if (parsedUrl.searchParams.has("pdf")) {
+    if (parsedUrl.searchParams.has("pdf") && !isDirectCircularPdf) {
       continue;
     }
 
