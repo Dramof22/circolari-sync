@@ -1,5 +1,7 @@
-const MAX_ARCHIVE_PAGES = 3;
-const MAX_CIRCULARS_TO_ANALYZE = 10;
+const MAX_ARCHIVE_PAGES_FAST = 20;
+const MAX_ARCHIVE_PAGES_DEEP = 6;
+const MAX_CIRCULARS_TO_ANALYZE_FAST = 180;
+const MAX_CIRCULARS_TO_ANALYZE_DEEP = 35;
 const SCAN_MARGIN_DAYS = 120;
 const MAX_PDFS_PER_CIRCULAR = 2;
 const MAX_PDF_READS_PER_ARCHIVE = 2;
@@ -209,17 +211,54 @@ function validateRequestParams(schoolUrl, from, to) {
 }
 
 async function analyzeSchoolUrl(schoolUrl, from, to, analysisMode = "fast") {
-  const parsedSchoolUrl = new URL(schoolUrl);
-  const firstPage = await readPage(schoolUrl);
+  const inputUrl = schoolUrl;
+  let parsedSchoolUrl = new URL(schoolUrl);
+  let analyzedUrl = schoolUrl;
+  let archiveAutoDetected = false;
+  let firstPage = await readPage(schoolUrl);
 
-  const allLinks = extractLinks(firstPage.html, parsedSchoolUrl);
-  const circularLinks = filterCircularLinks(allLinks);
-  const realCircularLinks = filterRealCircularPages(circularLinks, parsedSchoolUrl);
+  let allLinks = extractLinks(firstPage.html, parsedSchoolUrl);
+  let circularLinks = filterCircularLinks(allLinks);
+  let realCircularLinks = filterRealCircularPages(circularLinks, parsedSchoolUrl);
 
-  const isArchive = looksLikeCircularArchive(parsedSchoolUrl);
+  let isArchive = looksLikeCircularArchive(parsedSchoolUrl);
+
+  if (!isArchive && shouldTryDefaultCircularArchive(parsedSchoolUrl, realCircularLinks)) {
+    const candidateArchiveUrl = new URL("/circolare/", parsedSchoolUrl.origin);
+
+    try {
+      const candidatePage = await readPage(candidateArchiveUrl.toString());
+      const candidateLinks = extractLinks(candidatePage.html, candidateArchiveUrl);
+      const candidateCircularLinks = filterCircularLinks(candidateLinks);
+      const candidateRealCircularLinks = filterRealCircularPages(candidateCircularLinks, candidateArchiveUrl);
+
+      if (
+        looksLikeCircularArchive(candidateArchiveUrl) &&
+        candidateRealCircularLinks.length > 0
+      ) {
+        parsedSchoolUrl = candidateArchiveUrl;
+        analyzedUrl = candidateArchiveUrl.toString();
+        archiveAutoDetected = true;
+        firstPage = candidatePage;
+        allLinks = candidateLinks;
+        circularLinks = candidateCircularLinks;
+        realCircularLinks = candidateRealCircularLinks;
+        isArchive = true;
+      }
+    } catch (error) {
+      // Se /circolare/ non esiste o non è leggibile, continuiamo con la pagina originale.
+    }
+  }
 
   if (isArchive) {
-    const archiveLinks = await collectCircularLinksFromArchive(parsedSchoolUrl, from, to);
+    const archiveLimits = getArchiveLimits(analysisMode);
+    const archiveLinks = await collectCircularLinksFromArchive(parsedSchoolUrl, from, to, archiveLimits);
+    archiveLinks.links = archiveLinks.links
+      .filter((link) => shouldKeepArchiveLink(link, from, to))
+      .slice(0, archiveLimits.maxCircolari);
+
+    archiveLinks.totalLinksFound = archiveLinks.links.length;
+
     const analysis = await analyzeCircularLinks(archiveLinks, from, to, {
       readPdfAttachments: analysisMode === "deep",
       maxPdfReads: MAX_PDF_READS_PER_ARCHIVE
@@ -228,11 +267,14 @@ async function analyzeSchoolUrl(schoolUrl, from, to, analysisMode = "fast") {
     return {
       mode: "archive",
       analysisMode,
-      url: schoolUrl,
+      url: analyzedUrl,
+      inputUrl,
+      analyzedUrl,
+      archiveAutoDetected,
       from: from || null,
       to: to || null,
-      maxArchivePages: MAX_ARCHIVE_PAGES,
-      maxCircolari: MAX_CIRCULARS_TO_ANALYZE,
+      maxArchivePages: archiveLimits.maxArchivePages,
+      maxCircolari: archiveLimits.maxCircolari,
       maxPdfReadsPerArchive: analysisMode === "deep" ? MAX_PDF_READS_PER_ARCHIVE : 0,
       archivePagesRead: archiveLinks.archivePagesRead,
       linksFound: allLinks.length,
@@ -252,15 +294,18 @@ async function analyzeSchoolUrl(schoolUrl, from, to, analysisMode = "fast") {
 
   const pageText = extractCleanText(firstPage.html);
   const htmlMainText = extractMainCircularText(pageText);
-  const pdfText = await extractPdfTextFromCircularPage(firstPage.html, schoolUrl);
+  const pdfText = await extractPdfTextFromCircularPage(firstPage.html, analyzedUrl);
   const mainText = normalizeExtractedPdfSpacing(`${htmlMainText}\n\n${pdfText}`);
-  const analysis = analyzeText(mainText, schoolUrl);
+  const analysis = analyzeText(mainText, analyzedUrl);
   const filtered = filterAnalysisByRange(analysis, from, to);
 
   return {
     mode: "single",
     analysisMode: "deep",
-    url: schoolUrl,
+    url: analyzedUrl,
+    inputUrl,
+    analyzedUrl,
+    archiveAutoDetected,
     from: from || null,
     to: to || null,
     contentType: firstPage.contentType,
@@ -277,7 +322,9 @@ async function analyzeSchoolUrl(schoolUrl, from, to, analysisMode = "fast") {
   };
 }
 
-async function collectCircularLinksFromArchive(archiveUrl, from, to) {
+async function collectCircularLinksFromArchive(archiveUrl, from, to, limits = {}) {
+  const maxArchivePages = limits.maxArchivePages || MAX_ARCHIVE_PAGES_FAST;
+  const maxCircolari = limits.maxCircolari || MAX_CIRCULARS_TO_ANALYZE_FAST;
   const links = [];
   const seen = new Set();
   let totalLinksFound = 0;
@@ -285,7 +332,7 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to) {
 
   const scanFrom = from ? addDays(from, -SCAN_MARGIN_DAYS) : null;
 
-  for (let pageNumber = 1; pageNumber <= MAX_ARCHIVE_PAGES; pageNumber++) {
+  for (let pageNumber = 1; pageNumber <= maxArchivePages; pageNumber++) {
     const pageUrl = buildArchivePageUrl(archiveUrl, pageNumber);
 
     let page;
@@ -312,7 +359,7 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to) {
         pageDates.push(archiveDate);
       }
 
-      if (!shouldKeepArchiveLink(archiveDate, scanFrom, to)) {
+      if (!shouldKeepArchiveLink({ ...link, archiveDate }, scanFrom, to)) {
         continue;
       }
 
@@ -328,7 +375,7 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to) {
         archiveDate: archiveDate || null
       });
 
-      if (links.length >= MAX_CIRCULARS_TO_ANALYZE) {
+      if (links.length >= maxCircolari) {
         return {
           links,
           totalLinksFound,
@@ -353,21 +400,35 @@ async function collectCircularLinksFromArchive(archiveUrl, from, to) {
   };
 }
 
-function shouldKeepArchiveLink(archiveDate, scanFrom, to) {
-  if (!archiveDate) {
+function shouldKeepArchiveLink(link, from, to) {
+  if (!link) {
     return false;
   }
 
-  if (scanFrom && archiveDate < scanFrom) {
-    return false;
+  const title = link.title || link.text || link.url || "";
+  const archiveDate = link.archiveDate || findArchiveDateInTitle(title);
+
+  // Nuova logica semplice:
+  // il sito usa una finestra automatica breve. Se l'archivio ci dà una data
+  // chiara fuori finestra, non apriamo proprio quella circolare.
+  if (archiveDate) {
+    if (from && archiveDate < from) {
+      return false;
+    }
+
+    if (to && archiveDate > to) {
+      return false;
+    }
+
+    return true;
   }
 
-  if (to && archiveDate > to) {
-    return false;
-  }
-
-  return true;
+  // Nella nuova versione il calendario usa una finestra breve.
+  // Se dall'archivio non riusciamo a leggere la data del link, non apriamo
+  // la circolare: evita di analizzare pagine vecchie o generiche fuori periodo.
+  return false;
 }
+
 
 async function analyzeCircularLinks(linksData, from, to, options = {}) {
   const events = [];
@@ -855,6 +916,35 @@ function looksLikeCircularArchive(url) {
   return false;
 }
 
+function getArchiveLimits(analysisMode) {
+  if (analysisMode === "deep") {
+    return {
+      maxArchivePages: MAX_ARCHIVE_PAGES_DEEP,
+      maxCircolari: MAX_CIRCULARS_TO_ANALYZE_DEEP
+    };
+  }
+
+  return {
+    maxArchivePages: MAX_ARCHIVE_PAGES_FAST,
+    maxCircolari: MAX_CIRCULARS_TO_ANALYZE_FAST
+  };
+}
+
+function shouldTryDefaultCircularArchive(url, realCircularLinks) {
+  if (looksLikeCircularArchive(url)) {
+    return false;
+  }
+
+  // Se l'utente inserisce la homepage della scuola, proviamo comunque
+  // l'archivio standard /circolare/. Molte homepage contengono link a
+  // singole circolari recenti, ma non sono un vero archivio paginato.
+  if (url.pathname === "/" || url.pathname === "") {
+    return true;
+  }
+
+  return false;
+}
+
 function normalizeExtractedPdfSpacing(text) {
   return cleanText(text)
     .replace(/(\d)\s+(\d)(?=\s*[:./-])/g, "$1$2")
@@ -1266,22 +1356,45 @@ function findArchiveDateInTitle(title) {
     dicembre: "12"
   };
 
-  const match = cleanText(title).match(/\b(20\d{2})\s+(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})\b/i);
+  const text = cleanText(title);
 
-  if (!match) {
-    return null;
+  const numericMatch = text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](20\d{2})\b/);
+
+  if (numericMatch) {
+    const day = numericMatch[1].padStart(2, "0");
+    const month = numericMatch[2].padStart(2, "0");
+    const year = numericMatch[3];
+
+    return `${year}-${month}-${day}`;
   }
 
-  const year = match[1];
-  const day = match[2].padStart(2, "0");
-  const monthName = match[3].toLowerCase();
-  const month = months[monthName];
+  const italianDayMonthYearMatch = text.match(/\b(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})\s+(20\d{2})\b/i);
 
-  if (!month) {
-    return null;
+  if (italianDayMonthYearMatch) {
+    const day = italianDayMonthYearMatch[1].padStart(2, "0");
+    const monthName = italianDayMonthYearMatch[2].toLowerCase();
+    const year = italianDayMonthYearMatch[3];
+    const month = months[monthName];
+
+    if (month) {
+      return `${year}-${month}-${day}`;
+    }
   }
 
-  return `${year}-${month}-${day}`;
+  const italianYearDayMonthMatch = text.match(/\b(20\d{2})\s+(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})\b/i);
+
+  if (italianYearDayMonthMatch) {
+    const year = italianYearDayMonthMatch[1];
+    const day = italianYearDayMonthMatch[2].padStart(2, "0");
+    const monthName = italianYearDayMonthMatch[3].toLowerCase();
+    const month = months[monthName];
+
+    if (month) {
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  return null;
 }
 
 function normalizeTime(hour, minute) {
