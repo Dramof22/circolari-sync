@@ -208,6 +208,52 @@
       color: #123125;
     }
 
+    .site-identity {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0 14px;
+      padding: 14px;
+      border: 1px solid rgba(22, 101, 52, 0.16);
+      border-radius: 18px;
+      background: rgba(240, 253, 244, 0.72);
+    }
+
+    .site-icon-fallback {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #e8f5ee;
+      color: #166534;
+      font-weight: 800;
+      font-size: 18px;
+      flex: 0 0 auto;
+    }
+
+    .site-identity img {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      object-fit: contain;
+      background: #fff;
+      border: 1px solid rgba(22, 101, 52, 0.12);
+    }
+
+    .site-identity strong {
+      display: block;
+      color: var(--green-900);
+      font-size: 0.98rem;
+    }
+
+    .site-identity span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -489,6 +535,15 @@
           <button id="copyButton" class="secondary" type="button">Copia link</button>
         </div>
 
+        <div id="siteIdentity" class="site-identity" hidden>
+          <img id="siteIcon" alt="" loading="lazy">
+          <div id="siteIconFallback" class="site-icon-fallback" hidden></div>
+          <div>
+            <strong id="siteNameText">-</strong>
+            <span id="siteSupportText">-</span>
+          </div>
+        </div>
+
         <div class="grid">
           <div class="mini">
             <span>Periodo automatico</span>
@@ -568,6 +623,64 @@
     const pdfUnreadableNotice = document.getElementById("pdfUnreadableNotice");
     const pdfText = document.getElementById("pdfText");
     const archiveText = document.getElementById("archiveText");
+    const siteIdentity = document.getElementById("siteIdentity");
+    const siteIcon = document.getElementById("siteIcon");
+    const siteIconFallback = document.getElementById("siteIconFallback");
+    const siteNameText = document.getElementById("siteNameText");
+    const siteSupportText = document.getElementById("siteSupportText");
+
+    function supportLabel(data) {
+      if (!data) return "Diagnosi non disponibile";
+
+      if (data.support === "supported") return "Tipo sito: supportato";
+      if (data.support === "partial-spaggiari") return "Tipo sito: Spaggiari, supporto parziale";
+      if (data.support === "partial-pdf") return "Tipo sito: PDF, supporto parziale";
+      if (data.support === "partial") return "Tipo sito: supporto parziale";
+      if (data.support === "unsupported") return "Tipo sito: non riconosciuto";
+
+      return data.platform ? `Tipo sito: ${data.platform}` : "Tipo sito: non riconosciuto";
+    }
+
+    function showSiteIdentity(data) {
+      if (!siteIdentity || !data) return;
+
+      const name = data.siteName || hostnameFromUrl(data.detectedArchiveUrl || data.inputUrl || "");
+      const support = supportLabel(data.support, data.platform);
+      const initial = (name || "S").trim().charAt(0).toUpperCase();
+
+      siteIdentity.hidden = false;
+      siteIdentityTitle.textContent = name || "Sito scuola riconosciuto";
+      siteIdentitySubtitle.textContent = support;
+
+      if (siteIconFallback) {
+        siteIconFallback.textContent = initial;
+        siteIconFallback.hidden = false;
+      }
+
+      if (siteIcon) {
+        siteIcon.hidden = true;
+        siteIcon.removeAttribute("src");
+
+        if (data.siteIconUrl) {
+          siteIcon.onload = () => {
+            siteIcon.hidden = false;
+            if (siteIconFallback) siteIconFallback.hidden = true;
+          };
+
+          siteIcon.onerror = () => {
+            siteIcon.hidden = true;
+            if (siteIconFallback) {
+              siteIconFallback.textContent = initial;
+              siteIconFallback.hidden = false;
+            }
+          };
+
+          siteIcon.src = data.siteIconUrl;
+        }
+      }
+    }
+
+
     const eventsList = document.getElementById("eventsList");
 
     function pad(value) {
@@ -709,6 +822,7 @@
             diagnoseData = await diagnoseResponse.json();
 
             if (diagnoseData.ok) {
+              showSiteIdentity(diagnoseData);
               if (diagnoseData.support === "supported") {
                 setStatus(`Archivio trovato. Tipo sito: supportato. Ora leggo le circolari pubblicate negli ultimi 15 giorni.`, "ok");
               } else if (diagnoseData.support === "partial-spaggiari") {

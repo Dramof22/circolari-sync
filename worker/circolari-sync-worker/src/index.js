@@ -80,6 +80,8 @@ async function handleDiagnose(url) {
     });
 
     const bestArchive = archiveCandidates[0] || null;
+    const siteName = parsedSchoolUrl.hostname.replace(/^www\./, "");
+    const siteIconUrl = extractSiteIconUrlForDiagnose(html, parsedSchoolUrl.origin);
 
     const platform = detectPlatformForDiagnose(html, links, bestArchive);
 
@@ -92,6 +94,8 @@ async function handleDiagnose(url) {
     return jsonResponse({
       ok: true,
       inputUrl: parsedSchoolUrl.toString(),
+      siteName,
+      siteIconUrl,
       detectedArchiveUrl: bestArchive ? bestArchive.url : null,
       platform,
       confidence: bestArchive ? bestArchive.confidence : 0,
@@ -116,6 +120,70 @@ async function handleDiagnose(url) {
     }, 200);
   }
 }
+
+function extractSiteIconUrlForDiagnose(html, baseUrl) {
+  const value = String(html || "");
+
+  const candidates = [];
+
+  const linkRegex = /<link\b[^>]*>/gi;
+  let linkMatch;
+
+  while ((linkMatch = linkRegex.exec(value)) !== null) {
+    const tag = linkMatch[0];
+    const rel = extractHtmlAttributeForDiagnose(tag, "rel").toLowerCase();
+    const href = extractHtmlAttributeForDiagnose(tag, "href");
+
+    if (!href) continue;
+
+    if (
+      rel.includes("icon") ||
+      rel.includes("shortcut icon") ||
+      rel.includes("apple-touch-icon")
+    ) {
+      candidates.push(href);
+    }
+  }
+
+  const metaRegex = /<meta\b[^>]*>/gi;
+  let metaMatch;
+
+  while ((metaMatch = metaRegex.exec(value)) !== null) {
+    const tag = metaMatch[0];
+    const property = extractHtmlAttributeForDiagnose(tag, "property").toLowerCase();
+    const name = extractHtmlAttributeForDiagnose(tag, "name").toLowerCase();
+    const content = extractHtmlAttributeForDiagnose(tag, "content");
+
+    if (!content) continue;
+
+    if (
+      property === "og:image" ||
+      property === "twitter:image" ||
+      name === "twitter:image"
+    ) {
+      candidates.push(content);
+    }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return new URL(candidate, baseUrl).toString();
+    } catch {}
+  }
+
+  try {
+    return new URL("/favicon.ico", baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractHtmlAttributeForDiagnose(tag, attributeName) {
+  const pattern = new RegExp(`${attributeName}=["']([^"']+)["']`, "i");
+  const match = String(tag || "").match(pattern);
+  return match ? match[1] : "";
+}
+
 
 function detectArchiveCandidatesForDiagnose(links, baseUrl) {
   if (!Array.isArray(links)) return [];
