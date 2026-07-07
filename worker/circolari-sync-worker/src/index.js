@@ -25,6 +25,10 @@ export default {
       return handleAnalyze(url);
     }
 
+    if (url.pathname === "/api/diagnose") {
+      return handleDiagnose(url);
+    }
+
     if (url.pathname === "/calendar.ics" || url.pathname === "/api/calendar.ics") {
       return handleCalendar(url);
     }
@@ -32,6 +36,260 @@ export default {
     return new Response("Not found", { status: 404 });
   }
 };
+
+async function handleDiagnose(url) {
+  const schoolUrl = url.searchParams.get("url");
+
+  if (!schoolUrl) {
+    return jsonResponse({
+      ok: false,
+      message: "Parametro url mancante",
+      support: "invalid",
+      signals: {}
+    }, 400);
+  }
+
+  let parsedSchoolUrl;
+
+  try {
+    parsedSchoolUrl = new URL(schoolUrl);
+  } catch {
+    return jsonResponse({
+      ok: false,
+      message: "URL scuola non valido",
+      inputUrl: schoolUrl,
+      support: "invalid",
+      signals: {}
+    }, 400);
+  }
+
+  try {
+    const page = await readPage(parsedSchoolUrl.toString());
+    const html = page.html || "";
+    const links = extractLinks(html, parsedSchoolUrl.toString());
+
+    const archiveCandidates = detectArchiveCandidatesForDiagnose(links, parsedSchoolUrl.toString());
+
+    const pdfLinks = links.filter((link) =>
+      String(link.url || link.href || "").toLowerCase().includes(".pdf")
+    );
+
+    const spaggiariLinks = links.filter((link) => {
+      const value = `${link.url || ""} ${link.href || ""}`.toLowerCase();
+      return value.includes("spaggiari.eu") || value.includes("cspace.spaggiari.eu");
+    });
+
+    const bestArchive = archiveCandidates[0] || null;
+
+    const platform = detectPlatformForDiagnose(html, links, bestArchive);
+
+    const support = detectSupportForDiagnose(platform, {
+      archiveCandidates,
+      pdfLinks,
+      spaggiariLinks
+    });
+
+    return jsonResponse({
+      ok: true,
+      inputUrl: parsedSchoolUrl.toString(),
+      detectedArchiveUrl: bestArchive ? bestArchive.url : null,
+      platform,
+      confidence: bestArchive ? bestArchive.confidence : 0,
+      reason: bestArchive ? bestArchive.reason : "Nessun archivio circolari riconosciuto con sicurezza",
+      support,
+      signals: {
+        homepageLinks: links.length,
+        archiveCandidates: archiveCandidates.length,
+        pdfLinks: pdfLinks.length,
+        spaggiariLinks: spaggiariLinks.length
+      },
+      archiveCandidates: archiveCandidates.slice(0, 5)
+    });
+  } catch (error) {
+    return jsonResponse({
+      ok: false,
+      inputUrl: parsedSchoolUrl.toString(),
+      message: "Diagnosi non riuscita",
+      error: String(error),
+      support: "unknown",
+      signals: {}
+    }, 200);
+  }
+}
+
+function detectArchiveCandidatesForDiagnose(links, baseUrl) {
+  if (!Array.isArray(links)) return [];
+
+  const candidates = [];
+
+  for (const link of links) {
+    const rawUrl = link.url || link.href;
+    if (!rawUrl) continue;
+
+    let absoluteUrl;
+
+    try {
+      absoluteUrl = new URL(rawUrl, baseUrl).toString();
+    } catch {
+      continue;
+    }
+
+    const text = `${link.text || ""} ${link.title || ""} ${link.label || ""}`
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const lowerUrl = absoluteUrl.toLowerCase();
+    const lowerText = text.toLowerCase();
+
+    let score = 0;
+    const reasons = [];
+
+    if (lowerText === "le circolari") {
+      score += 100;
+      reasons.push("testo esatto Le circolari");
+    }
+
+    if (lowerText.includes("circolari")) {
+      score += 70;
+      reasons.push("testo contiene circolari");
+    }
+
+    if (lowerText.includes("comunicati") || lowerText.includes("comunicazioni")) {
+      score += 45;
+      reasons.push("testo contiene comunicati/comunicazioni");
+    }
+
+    if (lowerText.includes("archivio")) {
+      score += 30;
+      reasons.push("testo contiene archivio");
+    }
+
+    if (lowerUrl.includes("/circolare/")) {
+      score += 80;
+      reasons.push("URL contiene /circolare/");
+    }
+
+    if (lowerUrl.includes("/circolari/")) {
+      score += 80;
+      reasons.push("URL contiene /circolari/");
+    }
+
+    if (lowerUrl.includes("/categoria/le-circolari/")) {
+      score += 75;
+      reasons.push("URL contiene /categoria/le-circolari/");
+    }
+
+    if (lowerUrl.includes("/categoria/circolari/")) {
+      score += 70;
+      reasons.push("URL contiene /categoria/circolari/");
+    }
+
+    if (lowerUrl.includes("/comunicati")) {
+      score += 65;
+      reasons.push("URL contiene /comunicati");
+    }
+
+    if (lowerUrl.includes("/pagine/archivio-circolari")) {
+      score += 60;
+      reasons.push("URL contiene archivio-circolari");
+    }
+
+    if (
+      lowerUrl.includes("privacy") ||
+      lowerUrl.includes("cookie") ||
+      lowerUrl.includes("wp-login") ||
+      lowerUrl.includes("/feed") ||
+      lowerUrl.includes("#")
+    ) {
+      score -= 100;
+      reasons.push("link utility escluso");
+    }
+
+    if (score <= 0) continue;
+
+    candidates.push({
+      url: absoluteUrl,
+      text,
+      score,
+      confidence: Math.min(0.99, Math.round((score / 120) * 100) / 100),
+      reason: reasons.join(", ")
+    });
+  }
+
+  const seen = new Set();
+
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate) => {
+      if (seen.has(candidate.url)) return false;
+      seen.add(candidate.url);
+      return true;
+    });
+}
+
+function detectPlatformForDiagnose(html, links, bestArchive) {
+  const value = String(html || "").toLowerCase();
+
+  const allLinks = Array.isArray(links)
+    ? links.map((link) => `${link.url || ""} ${link.href || ""}`).join(" ").toLowerCase()
+    : "";
+
+  const archiveUrl = bestArchive ? String(bestArchive.url || "").toLowerCase() : "";
+
+  if (
+    value.includes("web.spaggiari.eu") ||
+    allLinks.includes("web.spaggiari.eu") ||
+    allLinks.includes("cspace.spaggiari.eu") ||
+    archiveUrl.includes("spaggiari.eu")
+  ) {
+    return "spaggiari";
+  }
+
+  if (
+    value.includes("wp-content") ||
+    value.includes("wp-json") ||
+    value.includes("wordpress") ||
+    archiveUrl.includes("/circolare/") ||
+    archiveUrl.includes("/circolari/")
+  ) {
+    return "wordpress-school";
+  }
+
+  if (
+    value.includes("designers.italia.it") ||
+    value.includes("bootstrap-italia") ||
+    value.includes("schema.gov.it")
+  ) {
+    return "design-scuola-italia";
+  }
+
+  if (archiveUrl.includes(".pdf")) {
+    return "pdf-direct";
+  }
+
+  return "unknown";
+}
+
+function detectSupportForDiagnose(platform, signals) {
+  if (platform === "wordpress-school" || platform === "design-scuola-italia") {
+    return "supported";
+  }
+
+  if (platform === "spaggiari") {
+    return "partial-spaggiari";
+  }
+
+  if (signals && signals.pdfLinks && signals.pdfLinks.length > 0) {
+    return "partial-pdf";
+  }
+
+  if (signals && signals.archiveCandidates && signals.archiveCandidates.length > 0) {
+    return "partial";
+  }
+
+  return "unsupported";
+}
+
 
 async function handleAnalyze(url) {
   const schoolUrl = url.searchParams.get("url");
