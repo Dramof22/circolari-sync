@@ -514,6 +514,10 @@
           <div class="events-tools">
             <input id="eventsSearch" class="events-search" type="search" placeholder="Cerca nella lista eventi..." autocomplete="off">
           </div>
+    <div id="pdfUnreadableNotice" class="notice warning" style="display:none;">
+      Abbiamo trovato alcune circolari in PDF, ma non siamo riusciti a leggerle automaticamente.
+      È possibile che siano PDF scannerizzati o immagini.
+    </div>
           <div id="eventsList"></div>
         </div>
       </div>
@@ -562,6 +566,7 @@
     const eventsCountText = document.getElementById("eventsCountText");
     const eventsSearch = document.getElementById("eventsSearch");
     let currentEvents = [];
+    const pdfUnreadableNotice = document.getElementById("pdfUnreadableNotice");
     const pdfText = document.getElementById("pdfText");
     const archiveText = document.getElementById("archiveText");
     const eventsList = document.getElementById("eventsList");
@@ -714,6 +719,12 @@
         const eventsCount = Array.isArray(data.events) ? data.events.length : 0;
         eventsCountText.textContent = String(eventsCount);
         pdfText.textContent = `${data.pdfReadsSucceeded ?? 0}/${data.pdfReadsAttempted ?? 0}`;
+        const pdfReadsAttempted = Number(data.pdfReadsAttempted || 0);
+        const pdfReadsSucceeded = Number(data.pdfReadsSucceeded || 0);
+        if (pdfUnreadableNotice) {
+          pdfUnreadableNotice.style.display =
+            pdfReadsAttempted > 0 && pdfReadsSucceeded === 0 ? "block" : "none";
+        }
         archiveText.textContent = data.analyzedUrl || data.url || url;
 
         renderEvents(data.events || []);

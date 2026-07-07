@@ -705,6 +705,34 @@ function shouldKeepArchiveLink(link, from, to) {
 }
 
 
+function buildArchiveItemFallbackText(link) {
+  const parts = [];
+
+  if (link.title) {
+    parts.push(link.title);
+  }
+
+  if (link.archiveDate) {
+    parts.push(`Data pubblicazione archivio: ${link.archiveDate}`);
+  }
+
+  if (link.url) {
+    parts.push(link.url);
+
+    try {
+      const url = new URL(link.url);
+      const fileName = decodeURIComponent(url.pathname.split("/").pop() || "");
+      if (fileName) {
+        parts.push(fileName.replace(/[-_]+/g, " ").replace(/\.pdf$/i, ""));
+      }
+    } catch (error) {
+      // URL non valido: ignora fallback nome file
+    }
+  }
+
+  return parts.join("\n");
+}
+
 async function analyzeCircularLinks(linksData, from, to, options = {}) {
   const events = [];
   const dubbi = [];
@@ -742,7 +770,10 @@ async function analyzeCircularLinks(linksData, from, to, options = {}) {
           }
         }
 
-        const mainText = normalizeExtractedPdfSpacing(pdfText || "");
+        const fallbackText = buildArchiveItemFallbackText(link);
+        const mainText = normalizeExtractedPdfSpacing(
+          pdfText ? `${fallbackText}\n\n${pdfText}` : fallbackText
+        );
         const analysis = analyzeText(mainText, link.url);
         const filtered = filterAnalysisByRange(analysis, from, to);
         const enrichedDubbi = enrichDubbiWithPdfNotes(filtered.dubbi, {
@@ -786,7 +817,8 @@ async function analyzeCircularLinks(linksData, from, to, options = {}) {
 
       pdfLinksFound += circularPdfLinksFound;
 
-      const htmlOnlyText = normalizeExtractedPdfSpacing(htmlMainText);
+      const fallbackText = buildArchiveItemFallbackText(link);
+      const htmlOnlyText = normalizeExtractedPdfSpacing(`${fallbackText}\n\n${htmlMainText}`);
       const htmlOnlyAnalysis = analyzeText(htmlOnlyText, link.url);
       const htmlOnlyFiltered = filterAnalysisByRange(htmlOnlyAnalysis, from, to);
       const shouldTryPdf = shouldReadPdfForArchiveItem(htmlOnlyFiltered, circularPdfLinksFound, link);
