@@ -536,8 +536,6 @@
         </div>
 
         <div id="siteIdentity" class="site-identity" hidden>
-          <img id="siteIcon" alt="" loading="lazy">
-          <div id="siteIconFallback" class="site-icon-fallback" hidden></div>
           <div>
             <strong id="siteNameText">-</strong>
             <span id="siteSupportText">-</span>
@@ -624,14 +622,44 @@
     const pdfText = document.getElementById("pdfText");
     const archiveText = document.getElementById("archiveText");
     const siteIdentity = document.getElementById("siteIdentity");
-    const siteIcon = document.getElementById("siteIcon");
-    const siteIconFallback = document.getElementById("siteIconFallback");
     const siteNameText = document.getElementById("siteNameText");
     const siteSupportText = document.getElementById("siteSupportText");
 
-    function supportLabel(data) {
-      if (!data) return "Diagnosi non disponibile";
+    function cleanSchoolNameFromUrl(url) {
+      try {
+        const hostname = new URL(url).hostname.replace(/^www\./, "");
+        return hostname || "";
+      } catch {
+        return "";
+      }
+    }
 
+    function schoolDisplayName(dataOrUrl) {
+      if (!dataOrUrl) return "";
+
+      if (typeof dataOrUrl === "string") {
+        return cleanSchoolNameFromUrl(dataOrUrl);
+      }
+
+      return (
+        dataOrUrl.siteName ||
+        cleanSchoolNameFromUrl(dataOrUrl.detectedArchiveUrl || dataOrUrl.inputUrl || "") ||
+        ""
+      );
+    }
+
+    function showSiteIdentity(dataOrUrl, supportText = "") {
+      if (!siteIdentity) return;
+
+      const schoolName = schoolDisplayName(dataOrUrl);
+
+      siteIdentity.hidden = false;
+      siteNameText.textContent = schoolName || "Scuola riconosciuta";
+      siteSupportText.textContent = supportText || (typeof dataOrUrl === "object" ? supportLabel(dataOrUrl) : "");
+    }
+
+    function supportLabel(data) {
+      if (!data) return "Tipo sito: non riconosciuto";
       if (data.support === "supported") return "Tipo sito: supportato";
       if (data.support === "partial-spaggiari") return "Tipo sito: Spaggiari, supporto parziale";
       if (data.support === "partial-pdf") return "Tipo sito: PDF, supporto parziale";
@@ -641,47 +669,19 @@
       return data.platform ? `Tipo sito: ${data.platform}` : "Tipo sito: non riconosciuto";
     }
 
-    function showSiteIdentity(data) {
-      if (!siteIdentity || !data) return;
+    function schoolNameLabel(data) {
+      if (!data) return "Scuola riconosciuta";
 
-      const name = data.siteName || hostnameFromUrl(data.detectedArchiveUrl || data.inputUrl || "");
-      const support = supportLabel(data.support, data.platform);
-      const initial = (name || "S").trim().charAt(0).toUpperCase();
+      const rawName =
+        data.siteName ||
+        hostnameFromUrl(data.detectedArchiveUrl || data.inputUrl || "");
 
-      siteIdentity.hidden = false;
-      siteIdentityTitle.textContent = name || "Sito scuola riconosciuto";
-      siteIdentitySubtitle.textContent = support;
+      if (!rawName) return "Scuola riconosciuta";
 
-      if (siteIconFallback) {
-        siteIconFallback.textContent = initial;
-        siteIconFallback.hidden = false;
-      }
-
-      if (siteIcon) {
-        siteIcon.hidden = true;
-        siteIcon.removeAttribute("src");
-
-        if (data.siteIconUrl) {
-          siteIcon.onload = () => {
-            siteIcon.hidden = false;
-            if (siteIconFallback) siteIconFallback.hidden = true;
-          };
-
-          siteIcon.onerror = () => {
-            siteIcon.hidden = true;
-            if (siteIconFallback) {
-              siteIconFallback.textContent = initial;
-              siteIconFallback.hidden = false;
-            }
-          };
-
-          siteIcon.src = data.siteIconUrl;
-        }
-      }
+      return `Scuola riconosciuta: ${rawName}`;
     }
 
 
-    const eventsList = document.getElementById("eventsList");
 
     function pad(value) {
       return String(value).padStart(2, "0");

@@ -80,7 +80,7 @@ async function handleDiagnose(url) {
     });
 
     const bestArchive = archiveCandidates[0] || null;
-    const siteName = parsedSchoolUrl.hostname.replace(/^www\./, "");
+    const siteName = extractSiteNameForDiagnose(html, parsedSchoolUrl.hostname);
     const siteIconUrl = extractSiteIconUrlForDiagnose(html, parsedSchoolUrl.origin);
 
     const platform = detectPlatformForDiagnose(html, links, bestArchive);
@@ -119,6 +119,84 @@ async function handleDiagnose(url) {
       signals: {}
     }, 200);
   }
+}
+
+function extractSiteNameForDiagnose(html, fallbackHostname) {
+  const fallback = String(fallbackHostname || "").replace(/^www\./, "");
+
+  const candidates = [
+    extractMetaContentForDiagnose(html, "property", "og:site_name"),
+    extractMetaContentForDiagnose(html, "name", "application-name"),
+    extractMetaContentForDiagnose(html, "name", "apple-mobile-web-app-title"),
+    extractTitleForDiagnose(html),
+  ];
+
+  for (const candidate of candidates) {
+    const cleaned = cleanSiteNameForDiagnose(candidate);
+    if (cleaned) return cleaned;
+  }
+
+  return fallback;
+}
+
+function extractTitleForDiagnose(html) {
+  const match = String(html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!match) return "";
+  return decodeHtmlForDiagnose(match[1]);
+}
+
+function extractMetaContentForDiagnose(html, attrName, attrValue) {
+  const source = String(html || "");
+  const re = /<meta\b[^>]*>/gi;
+  let match;
+
+  while ((match = re.exec(source))) {
+    const tag = match[0];
+    const value = extractHtmlAttributeForDiagnose(tag, attrName);
+    if (!value || value.toLowerCase() !== String(attrValue).toLowerCase()) continue;
+
+    return decodeHtmlForDiagnose(extractHtmlAttributeForDiagnose(tag, "content") || "");
+  }
+
+  return "";
+}
+
+function cleanSiteNameForDiagnose(value) {
+  let text = decodeHtmlForDiagnose(value)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text) return "";
+
+  text = text
+    .replace(/^home\s*[-|–—:]\s*/i, "")
+    .replace(/\s*[-|–—:]\s*home$/i, "")
+    .replace(/^homepage\s*[-|–—:]\s*/i, "")
+    .replace(/\s*[-|–—:]\s*homepage$/i, "")
+    .trim();
+
+  const separators = [" | ", " – ", " — ", " - "];
+  for (const sep of separators) {
+    if (text.includes(sep)) {
+      const parts = text.split(sep).map((part) => part.trim()).filter(Boolean);
+      const useful = parts.find((part) => /istituto|scuola|liceo|comprensivo|circolo|direzione|educandato|convitt/i.test(part));
+      if (useful) return useful;
+      if (parts[0]) return parts[0];
+    }
+  }
+
+  return text.replace(/\s*[-|–—:]\s*$/, "").trim();
+}
+
+function decodeHtmlForDiagnose(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
 }
 
 function extractSiteIconUrlForDiagnose(html, baseUrl) {
