@@ -552,11 +552,11 @@
             <strong id="eventsCountText">-</strong>
           </div>
           <div class="mini">
-            <span>PDF letti</span>
+            <span>PDF leggibili</span>
             <strong id="pdfText">-</strong>
           </div>
           <div class="mini">
-            <span>Archivio usato</span>
+            <span>Archivio trovato</span>
             <strong id="archiveText">-</strong>
           </div>
         </div>
@@ -755,7 +755,7 @@
       if (!Array.isArray(events) || events.length === 0) {
         eventsList.innerHTML = `
           <div class="event">
-            <div class="event-title">Nessun evento certo trovato.</div>
+            <div class="event-title">Non abbiamo trovato eventi certi nelle circolari pubblicate negli ultimi 15 giorni.</div>
             <div class="event-date">Il calendario resta comunque aggiornabile: quando usciranno nuove circolari, il link potrà aggiornarsi.</div>
           </div>
         `;
@@ -779,6 +779,18 @@
 
         item.appendChild(title);
         item.appendChild(when);
+
+        const sourceUrl = event.sourceUrl || event.url || event.link || event.circularUrl || "";
+        if (sourceUrl) {
+          const source = document.createElement("a");
+          source.className = "event-date";
+          source.href = sourceUrl;
+          source.target = "_blank";
+          source.rel = "noopener noreferrer";
+          source.textContent = "Apri circolare";
+          item.appendChild(source);
+        }
+
         eventsList.appendChild(item);
       });
     }
@@ -883,9 +895,9 @@
         } else if (diagnoseData && diagnoseData.support === "partial-spaggiari") {
           setStatus("Archivio trovato, ma questa scuola usa documenti Spaggiari: nessun evento certo leggibile automaticamente per ora.", "warn");
         } else if (diagnoseData && diagnoseData.support === "unsupported") {
-          setStatus("Nessun evento certo trovato. Prova a incollare direttamente il link dell’archivio circolari della scuola.", "warn");
+          setStatus("Non abbiamo trovato eventi certi nelle circolari pubblicate negli ultimi 15 giorni. Prova a incollare direttamente il link dell’archivio circolari della scuola.", "warn");
         } else {
-          setStatus("Calendario generato. Nessun evento certo trovato per ora.", "warn");
+          setStatus("Calendario generato, ma non abbiamo trovato eventi certi nelle circolari pubblicate negli ultimi 15 giorni.", "warn");
         }
       } catch (error) {
         setStatus(`Errore: ${error.message}`, "danger");
