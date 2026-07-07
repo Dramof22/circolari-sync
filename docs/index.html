@@ -780,7 +780,15 @@
         item.appendChild(title);
         item.appendChild(when);
 
-        const sourceUrl = event.sourceUrl || event.url || event.link || event.circularUrl || "";
+        const sourceUrl =
+          event.sourceUrl ||
+          event.source ||
+          event.sourcePageUrl ||
+          event.url ||
+          event.link ||
+          event.href ||
+          event.circularUrl ||
+          "";
         if (sourceUrl) {
           const source = document.createElement("a");
           source.className = "event-date";
