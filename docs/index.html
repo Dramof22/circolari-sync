@@ -674,6 +674,10 @@
       const url = normalizeUrl(rawUrl);
       const range = getRange();
 
+      const diagnoseUrl = buildWorkerUrl("/api/diagnose", {
+        url
+      });
+
       const analyzeUrl = buildWorkerUrl("/api/analyze", {
         url,
         from: range.from,
@@ -694,9 +698,34 @@
 
       generateButton.disabled = true;
       generateButton.textContent = "Analisi in corso...";
-      setStatus("Sto cercando le circolari e leggendo i PDF utili.", "warn");
+      setStatus("Sto cercando l’archivio circolari della scuola.", "warn");
 
       try {
+        let diagnoseData = null;
+
+        try {
+          const diagnoseResponse = await fetch(diagnoseUrl);
+          if (diagnoseResponse.ok) {
+            diagnoseData = await diagnoseResponse.json();
+
+            if (diagnoseData.ok) {
+              if (diagnoseData.support === "supported") {
+                setStatus(`Archivio trovato. Tipo sito: supportato. Ora leggo le circolari pubblicate negli ultimi 15 giorni.`, "ok");
+              } else if (diagnoseData.support === "partial-spaggiari") {
+                setStatus("Archivio trovato, ma questa scuola usa documenti Spaggiari: alcuni contenuti potrebbero non essere leggibili automaticamente dal Worker gratuito.", "warn");
+              } else if (diagnoseData.support === "partial-pdf") {
+                setStatus("Archivio trovato con PDF: provo a leggere solo i documenti testuali disponibili.", "warn");
+              } else if (diagnoseData.support === "unsupported") {
+                setStatus("Non ho riconosciuto un archivio circolari chiaro. Provo comunque l’analisi; se non funziona, incolla direttamente il link dell’archivio circolari.", "warn");
+              } else {
+                setStatus("Diagnosi completata. Ora provo a leggere le circolari pubblicate negli ultimi 15 giorni.", "warn");
+              }
+            }
+          }
+        } catch {
+          setStatus("Non sono riuscito a completare la diagnosi, provo comunque a generare il calendario.", "warn");
+        }
+
         const response = await fetch(analyzeUrl);
 
         if (!response.ok) {
@@ -724,14 +753,26 @@
           pdfUnreadableNotice.style.display =
             pdfReadsAttempted > 0 && pdfReadsSucceeded === 0 ? "block" : "none";
         }
-        archiveText.textContent = data.analyzedUrl || data.url || url;
+        archiveText.textContent =
+          data.analyzedUrl ||
+          (diagnoseData && diagnoseData.detectedArchiveUrl) ||
+          data.url ||
+          url;
 
         renderEvents(data.events || []);
 
         result.className = "result show";
 
         const count = Array.isArray(data.events) ? data.events.length : 0;
-        setStatus(count > 0 ? `Calendario generato. Eventi trovati: ${count}.` : "Calendario generato. Nessun evento certo trovato per ora.", count > 0 ? "ok" : "warn");
+        if (count > 0) {
+          setStatus(`Calendario generato. Eventi trovati: ${count}.`, "ok");
+        } else if (diagnoseData && diagnoseData.support === "partial-spaggiari") {
+          setStatus("Archivio trovato, ma questa scuola usa documenti Spaggiari: nessun evento certo leggibile automaticamente per ora.", "warn");
+        } else if (diagnoseData && diagnoseData.support === "unsupported") {
+          setStatus("Nessun evento certo trovato. Prova a incollare direttamente il link dell’archivio circolari della scuola.", "warn");
+        } else {
+          setStatus("Calendario generato. Nessun evento certo trovato per ora.", "warn");
+        }
       } catch (error) {
         setStatus(`Errore: ${error.message}`, "danger");
       } finally {
